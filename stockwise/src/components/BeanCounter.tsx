@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { StockUpload } from "@/components/StockUpload";
 
 // All decisions, the policy guard, Stripe and Cognee live in the Python API (api.py),
 // proxied at /bc/* by next.config.ts. This component only renders state and sends clicks.
@@ -244,6 +245,9 @@ export function BeanCounter() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <div className="mt-4">
+                <StockUpload<State> onState={setState} />
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <PrimaryButton onClick={runAgent} disabled={busy !== null} loading={busy === "run"} loadingLabel="Checking stock, quotes and policy…">
