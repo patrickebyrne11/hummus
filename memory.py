@@ -23,6 +23,12 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent / ".env")
 
+# macOS python.org builds ship without root CAs, so TLS to Cognee Cloud fails
+# with CERTIFICATE_VERIFY_FAILED. Point the ssl module at certifi's bundle.
+if not os.environ.get("SSL_CERT_FILE"):
+    import certifi
+    os.environ["SSL_CERT_FILE"] = certifi.where()
+
 DATA = Path(__file__).parent / "data"
 AUDIT_LOG = DATA / "audit_log.jsonl"
 POLICY = DATA / "policy.md"
