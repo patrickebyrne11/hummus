@@ -76,5 +76,20 @@ def refund(payment_intent_id):
     return stripe.Refund.create(payment_intent=payment_intent_id)
 
 
+_account_id = None
+
+
 def dashboard_url(payment_intent_id):
-    return f"https://dashboard.stripe.com/test/payments/{payment_intent_id}"
+    """Test-mode Dashboard link scoped to the key's own account.
+
+    The key may belong to a Stripe sandbox, which has its own dashboard; an
+    unscoped /test/ link opens whichever account the browser has selected.
+    """
+    global _account_id
+    if _account_id is None:
+        try:
+            _account_id = stripe.Account.retrieve().id
+        except Exception:
+            _account_id = ""
+    prefix = f"/{_account_id}" if _account_id else ""
+    return f"https://dashboard.stripe.com{prefix}/test/payments/{payment_intent_id}"
