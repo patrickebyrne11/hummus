@@ -283,8 +283,8 @@ export function Stockwise() {
     <div className="flex-1">
       <header className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-5 sm:px-6">
         <div className="flex items-center gap-3">
-          <span className="btn-primary grid size-9 place-items-center rounded-xl font-display text-sm font-bold">S</span>
-          <span className="font-display text-lg font-semibold tracking-tight">Stockwise</span>
+          <span className="btn-primary grid size-9 place-items-center rounded-xl font-display text-sm font-bold">H</span>
+          <span className="font-display text-lg font-semibold tracking-tight">Hummus</span>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/beancounter" className="text-xs text-muted hover:text-foreground">

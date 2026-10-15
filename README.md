@@ -1,6 +1,6 @@
-# Hummus: Stockwise + BeanCounter
+# Hummus
 
-A corner coffee shop has no finance team. This project gives it one.
+A corner coffee shop has no finance team. Hummus gives it one, in two parts.
 
 - **Stockwise** reads the owner's stock list or spreadsheet, shows what's running out, finds the best wholesale deals, and checks out on Stripe once the owner approves.
 - **BeanCounter** restocks on its own within the owner's written purchasing policy. Small orders go through automatically. Big ones wait for one-tap approval. Every pound it spends points back to a policy clause and the evidence behind it.

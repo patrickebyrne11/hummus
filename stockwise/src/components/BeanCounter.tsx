@@ -158,7 +158,7 @@ export function BeanCounter() {
         </div>
         <div className="flex items-center gap-3">
           <Link href="/" className="text-xs text-muted hover:text-foreground">
-            ← Stockwise
+            ← Hummus
           </Link>
           <button
             onClick={() => mutate("/reset")}
