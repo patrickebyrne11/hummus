@@ -6,8 +6,8 @@ const manrope = Manrope({ variable: "--font-manrope", subsets: ["latin"] });
 const unbounded = Unbounded({ variable: "--font-unbounded", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Stockwise",
-  description: "An AI purchasing agent that finds independent cafés the best wholesale deals.",
+  title: "BeanCounter",
+  description: "An autonomous restocking agent for Bean & Leaf Coffee that buys within the owner's written policy.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

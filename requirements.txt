@@ -4,3 +4,5 @@ cognee
 python-dotenv
 anthropic
 pandas
+fastapi
+uvicorn
