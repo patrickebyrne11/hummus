@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SUPPLIERS } from "@/lib/catalog";
 import type { InventoryItem, ItemDeal } from "@/lib/schemas";
 import { qty, usd, usdPrecise } from "@/lib/format";
@@ -53,7 +53,7 @@ export function Stockwise() {
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelled, setCancelled] = useState(false);
-  const restored = useRef(false);
+  const [hydrated, setHydrated] = useState(false);
 
   // Restore after a cancelled Stripe checkout so Bob doesn't lose his review.
   // sessionStorage only exists after hydration, so this has to run in an effect.
@@ -72,19 +72,21 @@ export function Stockwise() {
       }
       setCancelled(new URLSearchParams(window.location.search).has("cancelled"));
     } catch {}
-    restored.current = true;
+    setHydrated(true);
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
-    if (!restored.current) return;
+    // Gate on state, not a ref: under Strict Mode the effects run twice, and a ref
+    // would let this overwrite storage before the second restore reads it.
+    if (!hydrated) return;
     try {
       sessionStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({ step, items, skipped, deals, summary, selection }),
       );
     } catch {}
-  }, [step, items, skipped, deals, summary, selection]);
+  }, [hydrated, step, items, skipped, deals, summary, selection]);
 
   async function readList() {
     setError(null);
@@ -476,10 +478,10 @@ export function Stockwise() {
 
       {step === "deals" && (
         <div className="fixed inset-x-0 bottom-4 px-4">
-          <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 rounded-3xl border border-line bg-surface-2/85 px-5 py-4 shadow-2xl shadow-black/50 backdrop-blur-xl">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 rounded-3xl border border-line bg-surface-2/85 px-5 py-4 shadow-2xl shadow-black/50 backdrop-blur-xl">
             <div>
               <div className="tabular font-display text-xl font-semibold">{usd(totals.newSpend)}</div>
-              <div className="text-sm text-muted">
+              <div className="hidden text-sm text-muted sm:block">
                 {chosen.length} item{chosen.length === 1 ? "" : "s"} from {totals.bySupplier.size} supplier
                 {totals.bySupplier.size === 1 ? "" : "s"}. You&apos;ll confirm payment on Stripe.
               </div>

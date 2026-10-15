@@ -55,9 +55,9 @@ body {
   position: absolute;
   inset: -20%;
   background:
-    radial-gradient(40% 35% at 15% 10%, rgb(255 138 61 / 0.28), transparent 70%),
-    radial-gradient(35% 40% at 85% 5%, rgb(198 81 255 / 0.30), transparent 70%),
-    radial-gradient(45% 40% at 70% 90%, rgb(79 209 255 / 0.18), transparent 70%);
+    radial-gradient(40% 35% at 15% 10%, rgb(255 138 61 / 0.42), transparent 70%),
+    radial-gradient(35% 40% at 85% 5%, rgb(198 81 255 / 0.45), transparent 70%),
+    radial-gradient(45% 40% at 70% 90%, rgb(79 209 255 / 0.30), transparent 70%);
   filter: blur(20px);
   animation: drift 28s ease-in-out infinite alternate;
 }
@@ -79,10 +79,10 @@ body {
 .rings {
   background: repeating-radial-gradient(
     circle at 100% 0%,
-    rgb(198 81 255 / 0.16) 0 1px,
-    transparent 1px 18px
+    rgb(198 81 255 / 0.28) 0 1px,
+    transparent 1px 16px
   );
-  mask-image: radial-gradient(70% 90% at 100% 0%, black, transparent 75%);
+  mask-image: radial-gradient(85% 110% at 100% 0%, black, transparent 80%);
 }
 
 .gradient-text {
