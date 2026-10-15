@@ -3,3 +3,4 @@ stripe
 cognee
 python-dotenv
 anthropic
+pandas
