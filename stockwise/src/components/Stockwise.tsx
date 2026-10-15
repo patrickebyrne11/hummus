@@ -30,6 +30,70 @@ const STEPS: { id: Step | "pay"; label: string }[] = [
   { id: "pay", label: "Pay" },
 ];
 
+const SCAN_LINES = [
+  "Squinting at your spreadsheet…",
+  "Counting beans, one by one…",
+  "Deciphering Bob's handwriting…",
+  "Politely ignoring the coffee stains…",
+  "Alphabetising the oat milk…",
+];
+
+const PARSE_LINES = [
+  "Teaching the robot to read…",
+  "Translating \"lots\" into litres…",
+  "Hunting for hidden croissants…",
+  "Reading between the lines…",
+];
+
+const DEAL_LINES = [
+  "Waking up the suppliers…",
+  "Sniffing out bargains…",
+  "Haggling with a very stubborn pallet…",
+  "Comparing oat milks, one sip at a time…",
+  "Bribing the delivery driver with biscuits…",
+  "Checking who's secretly overcharging…",
+  "Doing maths on the back of a napkin…",
+  "Almost there. Putting a bow on it…",
+];
+
+// Eases toward `cap` while `active`, so the bar feels alive without lying about completion.
+function useFakeProgress(active: boolean, ms: number, cap: number) {
+  const [p, setP] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const start = Date.now();
+    const t = setInterval(() => {
+      const x = Math.min((Date.now() - start) / ms, 1);
+      setP(Math.round(cap * (1 - Math.pow(1 - x, 2))));
+    }, 100);
+    return () => {
+      clearInterval(t);
+      setP(0);
+    };
+  }, [active, ms, cap]);
+  return p;
+}
+
+function LoaderCard({ title, lines, progress }: { title: string; lines: string[]; progress: number }) {
+  const idx = Math.min(lines.length - 1, Math.floor((progress / 100) * lines.length));
+  return (
+    <div role="status" aria-live="polite" className="flex flex-col items-center gap-4 px-4 py-12 text-center">
+      <span className="animate-bounce text-4xl motion-reduce:animate-none" aria-hidden>☕</span>
+      <div className="font-display text-lg font-semibold">{title}</div>
+      <div className="h-2 w-full max-w-md overflow-hidden rounded-full bg-line">
+        <div
+          className="h-full rounded-full transition-[width] duration-300"
+          style={{ width: `${progress}%`, background: "var(--grad)" }}
+        />
+      </div>
+      <div className="flex w-full max-w-md justify-between gap-4 text-sm text-muted">
+        <span className="text-left">{lines[idx]}</span>
+        <span className="tabular">{progress}%</span>
+      </div>
+    </div>
+  );
+}
+
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
@@ -55,6 +119,18 @@ export function Stockwise() {
   const [error, setError] = useState<string | null>(null);
   const [cancelled, setCancelled] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const scanProgress = useFakeProgress(scanning, 1800, 100);
+  const parseProgress = useFakeProgress(busy === "parse", 6000, 92);
+  const dealProgress = useFakeProgress(busy === "deals", 14000, 92);
+
+  function pickFile(f: File | null) {
+    setFile(f);
+    if (!f) return;
+    setScanning(true);
+    setTimeout(() => setScanning(false), 1800);
+  }
 
   // Restore after a cancelled Stripe checkout so Bob doesn't lose his review.
   // sessionStorage only exists after hydration, so this has to run in an effect.
@@ -215,7 +291,7 @@ export function Stockwise() {
         </ol>
 
         {cancelled && step === "deals" && (
-          <Banner>Payment was cancelled. Nothing was bought, and your deals are still here.</Banner>
+          <Banner>Payment cancelled. Nothing was bought.</Banner>
         )}
         {error && <Banner>{error}</Banner>}
 
@@ -226,11 +302,15 @@ export function Stockwise() {
               <h1 className="max-w-3xl font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
                 <span className="gradient-text">What&apos;s running low?</span>
               </h1>
-              <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted">
-                Paste a list or drop in your stock sheet. Nothing is bought until you say so.
-              </p>
+              <p className="mt-4 max-w-xl text-lg text-muted">Nothing is bought until you approve it.</p>
             </div>
 
+            {busy === "parse" ? (
+              <div className="mt-8 rounded-3xl border border-line bg-surface/80 backdrop-blur">
+                <LoaderCard title="Reading your list" lines={PARSE_LINES} progress={parseProgress} />
+              </div>
+            ) : (
+            <>
             <div className="mt-8 inline-flex rounded-full border border-line bg-surface/70 p-1 backdrop-blur" role="tablist">
               {(["type", "upload"] as const).map((m) => (
                 <button
@@ -266,20 +346,40 @@ export function Stockwise() {
                   </div>
                 </>
               ) : (
-                <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/15 px-4 py-16 text-center transition hover:border-orchid/60">
+                <label
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragging(false);
+                    pickFile(e.dataTransfer.files?.[0] ?? null);
+                  }}
+                  className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-16 text-center transition hover:border-orchid/60 ${
+                    dragging ? "border-orchid bg-orchid/10" : "border-white/15"
+                  }`}
+                >
                   <input
                     type="file"
                     accept=".xlsx,.xls,.csv,.ods"
                     className="sr-only"
-                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                    onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
                   />
-                  <span className="font-display text-lg font-semibold">{file ? file.name : "Drop your stock sheet here"}</span>
+                  {scanning ? (
+                    <LoaderCard title="Opening your sheet" lines={SCAN_LINES} progress={scanProgress} />
+                  ) : (
+                    <>
+                  <span className="font-display text-lg font-semibold">{file ? file.name : "Drop your stock sheet"}</span>
                   <span className="text-sm text-muted">
-                    {file ? `${(file.size / 1024).toFixed(1)} KB · click to change` : "Excel, CSV or ODS, up to 5 MB"}
+                    {file ? `${(file.size / 1024).toFixed(1)} KB · click to change` : "Excel, CSV or ODS"}
                   </span>
                   <a href="/sample-inventory.xlsx" onClick={(e) => e.stopPropagation()} className="mt-3 text-sm font-medium text-glacier underline-offset-4 hover:underline">
                     Sample sheet
                   </a>
+                    </>
+                  )}
                 </label>
               )}
             </div>
@@ -287,18 +387,26 @@ export function Stockwise() {
             <div className="mt-6">
               <PrimaryButton
                 onClick={readList}
-                disabled={busy !== null || (mode === "type" ? !text.trim() : !file)}
-                loading={busy === "parse"}
-                loadingLabel="Reading…"
+                disabled={busy !== null || scanning || (mode === "type" ? !text.trim() : !file)}
+                loading={false}
+                loadingLabel="Reading your list…"
               >
                 Read list
               </PrimaryButton>
             </div>
+            </>
+            )}
           </section>
         )}
 
         {step === "confirm" && (
           <section>
+            {busy === "deals" ? (
+              <div className="rounded-3xl border border-line bg-surface/80 backdrop-blur">
+                <LoaderCard title="Finding your best deals" lines={DEAL_LINES} progress={dealProgress} />
+              </div>
+            ) : (
+            <>
             <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">Your list</h1>
             <p className="mt-3 text-muted">Check the amounts to buy. Edit or remove anything.</p>
 
@@ -373,7 +481,7 @@ export function Stockwise() {
               <PrimaryButton
                 onClick={findDeals}
                 disabled={busy !== null || items.filter((i) => i.quantity > 0).length === 0}
-                loading={busy === "deals"}
+                loading={false}
                 loadingLabel="Comparing suppliers…"
               >
                 Find deals
@@ -382,6 +490,8 @@ export function Stockwise() {
                 Start over
               </button>
             </div>
+            </>
+            )}
           </section>
         )}
 
@@ -390,13 +500,13 @@ export function Stockwise() {
             <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
               <div>
                 <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">Deals</h1>
-                {summary && <p className="tabular mt-3 max-w-2xl text-muted">{summary}</p>}
+                {summary && <p className="tabular mt-3 line-clamp-2 max-w-2xl text-muted">{summary}</p>}
               </div>
               {totals.comparableCount > 0 && totals.savings > 0 && (
                 <div className="gradient-border rounded-3xl px-6 py-5">
                   <div className="text-sm text-muted">You save</div>
                   <div className="tabular gradient-text font-display text-4xl font-bold">{usd(totals.savings)}</div>
-                  <div className="mt-1 text-xs text-muted">vs current prices, {totals.comparableCount} items</div>
+                  <div className="mt-1 text-xs text-muted">vs today, {totals.comparableCount} items</div>
                 </div>
               )}
             </div>
@@ -405,7 +515,7 @@ export function Stockwise() {
               <div className="mt-6">
                 {totals.underMinimum.map((s) => (
                   <Banner key={s.id}>
-                    {s.name}: {usd(s.minOrderUsd)} minimum, this order is {usd(s.subtotal)}.
+                    {s.name} has a {usd(s.minOrderUsd)} minimum. You&apos;re at {usd(s.subtotal)}.
                   </Banner>
                 ))}
               </div>
@@ -427,8 +537,8 @@ export function Stockwise() {
                           {d.item.shortage && <ShortageTag level={d.item.shortage} />}
                         </h2>
                         <p className="tabular text-sm text-muted">
-                          Need {qty(d.item.quantity, d.item.unit)}
-                          {d.currentCost != null && <> · {usd(d.currentCost)} at current price</>}
+                          {qty(d.item.quantity, d.item.unit)}
+                          {d.currentCost != null && <> · now ~{usd(d.currentCost)}</>}
                         </p>
                       </div>
                       {d.options.length > 0 && (
@@ -490,7 +600,7 @@ export function Stockwise() {
                                 <span>{o.deliveryDays} day{o.deliveryDays > 1 ? "s" : ""}</span>
                                 <span>★ {o.rating}</span>
                               </div>
-                              <p className="mt-1.5 text-sm text-foreground/80">{o.why}</p>
+                              <p className="mt-1.5 line-clamp-1 text-sm text-muted">{o.why}</p>
                             </div>
                           </label>
                         );
@@ -515,7 +625,7 @@ export function Stockwise() {
               <div className="tabular font-display text-xl font-semibold">{usd(totals.newSpend)}</div>
               <div className="hidden text-sm text-muted sm:block">
                 {chosen.length} item{chosen.length === 1 ? "" : "s"} · {totals.bySupplier.size} supplier
-                {totals.bySupplier.size === 1 ? "" : "s"} · pay on Stripe
+                {totals.bySupplier.size === 1 ? "" : "s"}
               </div>
             </div>
             <PrimaryButton
