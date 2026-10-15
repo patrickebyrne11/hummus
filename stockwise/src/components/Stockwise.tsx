@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { SUPPLIERS } from "@/lib/catalog";
 import type { InventoryItem, ItemDeal } from "@/lib/schemas";
@@ -335,9 +334,6 @@ export function Stockwise() {
           <span className="font-display text-lg font-semibold tracking-tight">Hummus</span>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/beancounter" className="text-xs text-muted hover:text-foreground">
-            BeanCounter agent →
-          </Link>
           <span className="flex items-center gap-2 rounded-full border border-line bg-surface/60 px-3 py-1 text-xs text-muted backdrop-blur">
             <span className={`size-1.5 rounded-full ${aiMode === "ai" ? "bg-good" : "bg-warn"}`} />
             {aiMode === "ai" ? "Live AI, Stripe test mode" : aiMode === "demo" ? "Demo mode, sample matching" : "Prototype"}
