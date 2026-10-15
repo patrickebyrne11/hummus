@@ -1,58 +1,130 @@
 @import "tailwindcss";
 
+/* "Night roast": dark only. One gradient (ember → orchid → glacier) carries the identity. */
 :root {
-  --background: #f7f3ec;
-  --surface: #fffdf9;
-  --foreground: #2a1f17;
-  --muted: #7a6a5d;
-  --line: #e6ddd0;
-  --accent: #6b3e1f;
-  --accent-soft: #f1e4d6;
-  --good: #2f6b3a;
-  --good-soft: #e3f0e2;
-  --warn: #9a5b00;
-  --warn-soft: #fbefd9;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #17120e;
-    --surface: #211a15;
-    --foreground: #f1e9df;
-    --muted: #a8988a;
-    --line: #3a2f27;
-    --accent: #e0a46e;
-    --accent-soft: #3a2a1d;
-    --good: #8fd19b;
-    --good-soft: #1f3324;
-    --warn: #f0b860;
-    --warn-soft: #3a2c14;
-  }
+  color-scheme: dark;
+  --background: #0d0a1c;
+  --surface: #161229;
+  --surface-2: #1e1838;
+  --foreground: #f2eeff;
+  --muted: #9a93b8;
+  --line: rgb(255 255 255 / 0.08);
+  --ember: #ff8a3d;
+  --orchid: #c651ff;
+  --glacier: #4fd1ff;
+  --good: #5ff0b0;
+  --warn: #ffc46b;
+  --grad: linear-gradient(115deg, var(--ember), var(--orchid) 50%, var(--glacier));
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-line: var(--line);
-  --color-accent: var(--accent);
-  --color-accent-soft: var(--accent-soft);
+  --color-ember: var(--ember);
+  --color-orchid: var(--orchid);
+  --color-glacier: var(--glacier);
   --color-good: var(--good);
-  --color-good-soft: var(--good-soft);
   --color-warn: var(--warn);
-  --color-warn-soft: var(--warn-soft);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-fraunces);
+  --font-sans: var(--font-manrope);
+  --font-display: var(--font-unbounded);
+}
+
+html {
+  background: var(--background);
 }
 
 body {
-  background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-manrope), system-ui, sans-serif;
+}
+
+/* Page backdrop: drifting gradient mesh + fine dot grid. */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.backdrop::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(40% 35% at 15% 10%, rgb(255 138 61 / 0.28), transparent 70%),
+    radial-gradient(35% 40% at 85% 5%, rgb(198 81 255 / 0.30), transparent 70%),
+    radial-gradient(45% 40% at 70% 90%, rgb(79 209 255 / 0.18), transparent 70%);
+  filter: blur(20px);
+  animation: drift 28s ease-in-out infinite alternate;
+}
+.backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgb(255 255 255 / 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(to bottom, black, transparent 75%);
+}
+@keyframes drift {
+  to {
+    transform: translate3d(4%, 3%, 0) rotate(8deg);
+  }
+}
+
+/* Crema rings behind the headline. */
+.rings {
+  background: repeating-radial-gradient(
+    circle at 100% 0%,
+    rgb(198 81 255 / 0.16) 0 1px,
+    transparent 1px 18px
+  );
+  mask-image: radial-gradient(70% 90% at 100% 0%, black, transparent 75%);
+}
+
+.gradient-text {
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Gradient hairline border on a filled surface. */
+.gradient-border {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--surface-2), var(--surface-2)) padding-box,
+    var(--grad) border-box;
+}
+
+.btn-primary {
+  background: var(--grad);
+  background-size: 160% 100%;
+  background-position: 0% 50%;
+  color: #120c22;
+  transition: background-position 0.4s ease, opacity 0.2s;
+}
+.btn-primary:hover:not(:disabled) {
+  background-position: 100% 50%;
 }
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--glacier);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backdrop::before {
+    animation: none;
+  }
+  .btn-primary {
+    transition: none;
+  }
 }

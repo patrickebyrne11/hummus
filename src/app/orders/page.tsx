@@ -55,10 +55,10 @@ async function OrderDetails({ searchParams }: Pick<PageProps<"/orders">, "search
         {[...groups.entries()].map(([id, g], idx) => {
           const supplier = supplierById.get(id);
           return (
-            <article key={id} className="rounded-xl border border-line bg-surface">
+            <article key={id} className="rounded-3xl border border-line bg-surface/80 backdrop-blur">
               <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-5 py-3">
                 <div>
-                  <div className="text-xs uppercase tracking-wide text-muted">
+                  <div className="text-xs text-muted">
                     PO-{session.id.slice(-6).toUpperCase()}-{idx + 1}
                   </div>
                   <h2 className="font-medium">{g.name}</h2>
@@ -94,7 +94,7 @@ function Shell({ title, children }: { title: string; children?: React.ReactNode 
     <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
       <h1 className="font-display text-3xl font-semibold tracking-tight">{title}</h1>
       {children}
-      <Link href="/" className="mt-8 inline-block text-sm text-accent underline-offset-4 hover:underline">
+      <Link href="/" className="mt-8 inline-block text-sm text-glacier underline-offset-4 hover:underline">
         ← Start a new restock
       </Link>
     </main>
