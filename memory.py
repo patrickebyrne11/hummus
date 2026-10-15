@@ -15,6 +15,7 @@ import asyncio
 import json
 import os
 import sys
+from datetime import date, datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -29,6 +30,13 @@ POLICY = DATA / "policy.md"
 POLICY_DATASET = "beancounter_policy"
 DECISIONS_DATASET = "beancounter_decisions"
 WHY_TIMEOUT_S = 25
+
+# Actions that actually moved money (used for the §5 daily cap)
+SPEND_ACTIONS = {"auto_buy", "approved"}
+
+
+def cognee_configured():
+    return bool(os.environ.get("COGNEE_SERVICE_URL") and os.environ.get("COGNEE_API_KEY"))
 
 # Gives the agent a history to recall: where last-paid prices came from and why CheapBeans is off the list.
 PAST_DECISIONS = [
@@ -74,20 +82,39 @@ def decision_text(d):
 
 def record_decision(d):
     """Append to the local audit log, then send to Cognee in the background. Never blocks or raises."""
+    d.setdefault("ts", datetime.now(timezone.utc).isoformat(timespec="seconds"))
     with AUDIT_LOG.open("a") as f:
-        f.write(json.dumps(d) + "\n")
-    future = _writer.submit(asyncio.run, _remember([decision_text(d)], DECISIONS_DATASET))
-    future.add_done_callback(lambda fut: fut.exception() and print(f"[memory] Cognee write failed: {fut.exception()}"))
+        f.write(json.dumps(d, ensure_ascii=False) + "\n")
+    if cognee_configured():
+        future = _writer.submit(asyncio.run, _remember([decision_text(d)], DECISIONS_DATASET))
+        future.add_done_callback(lambda fut: fut.exception() and print(f"[memory] Cognee write failed: {fut.exception()}"))
+    return d
+
+
+def read_log():
+    if not AUDIT_LOG.exists():
+        return []
+    return [json.loads(line) for line in AUDIT_LOG.read_text().splitlines() if line.strip()]
+
+
+def spent_today(log=None):
+    """§5 input: money actually spent today (auto-buys + approved orders with a PaymentIntent)."""
+    today = date.today().isoformat()
+    return round(sum(
+        r["total"] for r in (log if log is not None else read_log())
+        if r.get("action") in SPEND_ACTIONS and r.get("payment_intent") and r.get("ts", "").startswith(today)
+    ), 2)
 
 
 def why(question):
     """Answer 'why did you…' from Cognee memory; fall back to audit log + policy via the LLM."""
-    try:
-        answer = _writer.submit(asyncio.run, _recall(question)).result(timeout=WHY_TIMEOUT_S)
-        if answer:
-            return {"source": "cognee", "answer": answer}
-    except Exception as e:
-        print(f"[memory] Cognee recall failed, using fallback: {e}")
+    if cognee_configured():
+        try:
+            answer = _writer.submit(asyncio.run, _recall(question)).result(timeout=WHY_TIMEOUT_S)
+            if answer:
+                return {"source": "cognee", "answer": answer}
+        except Exception as e:
+            print(f"[memory] Cognee recall failed, using fallback: {e}")
     return {"source": "audit_log", "answer": _why_fallback(question)}
 
 

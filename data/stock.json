@@ -1,6 +1,30 @@
 {
-  "oat_milk_l":      {"name": "Oat milk (L)",      "qty": 4,  "reorder_level": 10, "par": 30, "last_price": 1.60},
-  "coffee_beans_kg": {"name": "Coffee beans (kg)", "qty": 2,  "reorder_level": 5,  "par": 12, "last_price": 14.00},
-  "cups_12oz":       {"name": "12oz cups (x50)",   "qty": 8,  "reorder_level": 4,  "par": 12, "last_price": 6.50},
-  "croissants":      {"name": "Croissants (x12)",  "qty": 1,  "reorder_level": 3,  "par": 6,  "last_price": 9.00}
+  "oat_milk_l": {
+    "name": "Oat milk (L)",
+    "qty": 4,
+    "reorder_level": 10,
+    "par": 30,
+    "last_price": 1.6
+  },
+  "coffee_beans_kg": {
+    "name": "Coffee beans (kg)",
+    "qty": 2,
+    "reorder_level": 5,
+    "par": 12,
+    "last_price": 14.0
+  },
+  "cups_12oz": {
+    "name": "12oz cups (x50)",
+    "qty": 8,
+    "reorder_level": 4,
+    "par": 12,
+    "last_price": 6.5
+  },
+  "croissants": {
+    "name": "Croissants (x12)",
+    "qty": 1,
+    "reorder_level": 3,
+    "par": 6,
+    "last_price": 9.0
+  }
 }
