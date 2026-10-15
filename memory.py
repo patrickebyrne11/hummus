@@ -125,6 +125,8 @@ def why(question):
 
 
 def _why_fallback(question):
+    if not (os.environ.get("LLM_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")):
+        return _why_from_log(question)
     import anthropic
     log = AUDIT_LOG.read_text() if AUDIT_LOG.exists() else ""
     client = anthropic.Anthropic(api_key=os.environ.get("LLM_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"))
@@ -135,6 +137,35 @@ def _why_fallback(question):
         messages=[{"role": "user", "content": f"POLICY:\n{POLICY.read_text()}\n\nAUDIT LOG:\n{log}\n\nQUESTION: {question}"}],
     )
     return msg.content[0].text
+
+
+def _why_from_log(question):
+    """No-LLM fallback: find the audit-log decisions that match the question and quote them with the clauses."""
+    q = question.lower()
+    log = read_log()
+    words = [w for w in q.replace("?", " ").split() if len(w) > 3]
+
+    def score(r):
+        hay = f"{r.get('item', '')} {r.get('item_name', '')} {r.get('supplier', '')} {r.get('action', '')}".lower()
+        hay += " " + " ".join(f"{s['supplier']}" for s in r.get("skipped_quotes", [])).lower()
+        return sum(w.rstrip("s") in hay for w in words)
+
+    hits = sorted((r for r in log if r.get("action") != "no_action" or score(r)), key=score, reverse=True)
+    hits = [r for r in hits if score(r) > 0][:3]
+    if not hits:
+        return "No matching decision in the audit log yet. Run BeanCounter first, then ask again."
+    clauses = {line.split()[0]: line for line in POLICY.read_text().splitlines() if line.startswith("§")}
+    out = []
+    for r in hits:
+        line = (f"{r.get('item_name', r['item'])}: {r['action']} from {r.get('supplier') or '-'}, "
+                f"{r['qty']} x £{r['unit_price']:.2f} = £{r['total']:.2f}. {r['reasoning']}.")
+        for sk in r.get("skipped_quotes", []):
+            line += f" Skipped {sk['supplier']} at £{sk['unit_price']:.2f} ({sk['clause']}: {sk['reason']})."
+        if r.get("payment_intent"):
+            line += f" Stripe PaymentIntent {r['payment_intent']}."
+        cited = [clauses[c] for c in r["clause_ids"] if c in clauses]
+        out.append(line + ("\n  Policy: " + "\n  Policy: ".join(cited) if cited else ""))
+    return "\n\n".join(out)
 
 
 def seed():
