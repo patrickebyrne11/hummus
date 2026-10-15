@@ -23,6 +23,14 @@ Frozen croissants: 20 left, par 200
 Napkins: 1 case
 Espresso machine cleaning powder`;
 
+// Pre-set budget buckets the owner has already set aside. Placeholder data until this is wired to real accounts.
+const BUCKETS = [
+  { id: "weekly", name: "Weekly restock", left: 600, total: 800 },
+  { id: "dairy", name: "Dairy & bakery", left: 320, total: 400 },
+  { id: "events", name: "Events & catering", left: 1500, total: 2000 },
+  { id: "buffer", name: "Rainy day", left: 2000, total: 2500 },
+];
+
 const STEPS: { id: Step | "pay"; label: string }[] = [
   { id: "input", label: "Stock" },
   { id: "confirm", label: "Check list" },
@@ -74,11 +82,49 @@ function useFakeProgress(active: boolean, ms: number, cap: number) {
   return p;
 }
 
+// A bowl of hummus with a pita chip that dips in and out.
+function HummusBowl() {
+  return (
+    <svg viewBox="0 0 120 84" className="h-20 w-auto overflow-visible" aria-hidden>
+      <g className="hummus-bowl">
+        <path d="M12 44 C12 70 30 78 60 78 C90 78 108 70 108 44 Z" fill="#c9784a" />
+        <path d="M20 58 C40 66 80 66 100 58" stroke="#a85f36" strokeWidth="2" fill="none" strokeLinecap="round" />
+        <ellipse cx="60" cy="44" rx="48" ry="14" fill="#8f5a34" />
+        <ellipse cx="60" cy="43" rx="43" ry="11.5" fill="#f0d9a0" />
+        <path
+          className="hummus-swirl"
+          d="M24 43 C34 36 52 37 60 40 C68 43 86 42 96 40 M40 46 C50 49 70 49 80 46"
+          stroke="#d9b877"
+          strokeWidth="2.5"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <ellipse className="hummus-oil" cx="60" cy="42" rx="12" ry="4.5" fill="#b9a63a" opacity="0.85" />
+        <circle cx="40" cy="40" r="1.6" fill="#c0392b" />
+        <circle cx="78" cy="45" r="1.6" fill="#c0392b" />
+        <circle cx="52" cy="46" r="1.3" fill="#c0392b" />
+        <circle cx="70" cy="38" r="1.3" fill="#c0392b" />
+      </g>
+      <circle className="hummus-pea" style={{ animationDelay: "0s" }} cx="33" cy="42" r="3.2" fill="#e2b866" />
+      <circle className="hummus-pea" style={{ animationDelay: "0.35s" }} cx="87" cy="40" r="3.2" fill="#e2b866" />
+      <circle className="hummus-pea" style={{ animationDelay: "0.7s" }} cx="60" cy="47" r="3.2" fill="#e2b866" />
+      <g className="hummus-dip">
+        <path d="M82 6 L104 26 L84 30 Z" fill="#f1c27d" stroke="#c98f3d" strokeWidth="1.5" strokeLinejoin="round" />
+        <circle cx="90" cy="19" r="1" fill="#c98f3d" />
+        <circle cx="96" cy="24" r="1" fill="#c98f3d" />
+        <circle cx="86" cy="25" r="1" fill="#c98f3d" />
+      </g>
+      <path className="hummus-spark" style={{ animationDelay: "0.2s" }} d="M16 18 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z" fill="#ffc46b" />
+      <path className="hummus-spark" style={{ animationDelay: "0.9s" }} d="M52 4 l1.5 4 4 1.5 -4 1.5 -1.5 4 -1.5 -4 -4 -1.5 4 -1.5z" fill="#c651ff" />
+    </svg>
+  );
+}
+
 function LoaderCard({ title, lines, progress }: { title: string; lines: string[]; progress: number }) {
   const idx = Math.min(lines.length - 1, Math.floor((progress / 100) * lines.length));
   return (
     <div role="status" aria-live="polite" className="flex flex-col items-center gap-4 px-4 py-12 text-center">
-      <span className="animate-bounce text-4xl motion-reduce:animate-none" aria-hidden>☕</span>
+      <HummusBowl />
       <div className="font-display text-lg font-semibold">{title}</div>
       <div className="h-2 w-full max-w-md overflow-hidden rounded-full bg-line">
         <div
@@ -133,7 +179,8 @@ export function Stockwise() {
   }
   const [aiMode, setAiMode] = useState<"ai" | "demo" | null>(null);
   const [budget, setBudget] = useState("");
-  const [noLimit, setNoLimit] = useState(true);
+  const [bucketId, setBucketId] = useState<string | null>(null);
+  const [noLimit, setNoLimit] = useState(false);
   const [dealsBudget, setDealsBudget] = useState<number | null>(null);
   const budgetNum = !noLimit && Number(budget) > 0 ? Number(budget) : null;
 
@@ -153,7 +200,7 @@ export function Stockwise() {
         setSelection(s.selection);
         setAiMode(s.aiMode ?? null);
         setBudget(s.budget ?? "");
-        setNoLimit(s.noLimit ?? true);
+        setNoLimit(s.noLimit ?? false);
         setDealsBudget(s.dealsBudget ?? null);
       }
       setCancelled(new URLSearchParams(window.location.search).has("cancelled"));
@@ -265,7 +312,8 @@ export function Stockwise() {
     setSelection({});
     setSummary("");
     setBudget("");
-    setNoLimit(true);
+    setBucketId(null);
+    setNoLimit(false);
     setError(null);
     setCancelled(false);
   }
@@ -408,47 +456,85 @@ export function Stockwise() {
               )}
             </div>
 
-            <fieldset className="mx-auto mt-6 max-w-md rounded-2xl border border-line bg-surface/80 px-4 py-3 text-left backdrop-blur">
+            <fieldset className="mt-4 rounded-3xl border border-line bg-surface/80 p-4 text-left shadow-xl shadow-black/5 backdrop-blur sm:px-5">
               <legend className="sr-only">Budget for this order</legend>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className="text-sm font-medium">Budget for this order</span>
-                <div className="inline-flex rounded-full border border-line bg-background/60 p-0.5 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+                <div>
+                  <div className="font-display text-base font-semibold">Budget</div>
+                  <p className="mt-0.5 text-sm text-muted">
+                    {noLimit ? "Best value per item, whatever the total." : "I'll keep the order under this."}
+                  </p>
+                </div>
+                <div className="inline-flex rounded-full border border-line bg-background/60 p-1 text-sm">
                   {([true, false] as const).map((value) => (
                     <button
                       key={String(value)}
                       type="button"
                       aria-pressed={noLimit === value}
                       onClick={() => setNoLimit(value)}
-                      className={`rounded-full px-3 py-1.5 font-medium transition ${
+                      className={`rounded-full px-4 py-1.5 font-medium transition ${
                         noLimit === value ? "bg-foreground text-background" : "text-muted hover:text-foreground"
                       }`}
                     >
-                      {value ? "No limit" : "Set a budget"}
+                      {value ? "No limit" : "Set budget"}
                     </button>
                   ))}
                 </div>
               </div>
-              {noLimit ? (
-                <p className="mt-2 text-xs text-muted">I&apos;ll find the best value for each item, whatever the total.</p>
-              ) : (
-                <div className="mt-3 flex items-center gap-3">
-                  <div className="flex items-center rounded-xl border border-line bg-background/60 px-3 focus-within:border-orchid">
-                    <span className="text-muted">$</span>
-                    <input
-                      id="budget"
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
-                      step="any"
-                      autoFocus
-                      placeholder="e.g. 1000"
-                      aria-label="Budget amount"
-                      value={budget}
-                      onChange={(e) => setBudget(e.target.value)}
-                      className="tabular w-28 bg-transparent px-1.5 py-2 text-right outline-none placeholder:text-muted/60"
-                    />
+              {!noLimit && (
+                <div className="mt-4 border-t border-line pt-4">
+                  <div className="text-xs font-medium uppercase tracking-wide text-muted">Spend from a bucket</div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {BUCKETS.map((b) => {
+                      const active = bucketId === b.id;
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => {
+                            setBucketId(b.id);
+                            setBudget(String(b.left));
+                          }}
+                          className={`rounded-2xl border px-4 py-3 text-left transition ${
+                            active ? "border-orchid bg-orchid/10" : "border-line hover:border-foreground/25"
+                          }`}
+                        >
+                          <div className="flex items-baseline justify-between gap-3">
+                            <span className="text-sm font-semibold">{b.name}</span>
+                            <span className="tabular font-display text-sm font-semibold">${b.left.toLocaleString("en-US")}</span>
+                          </div>
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line">
+                            <div
+                              className="h-full rounded-full"
+                              style={{ width: `${(b.left / b.total) * 100}%`, background: "var(--grad)" }}
+                            />
+                          </div>
+                          <div className="tabular mt-1.5 text-xs text-muted">of ${b.total.toLocaleString("en-US")} left</div>
+                        </button>
+                      );
+                    })}
                   </div>
-                  <span className="text-xs text-muted">I&apos;ll keep the order under this.</span>
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <label htmlFor="budget" className="text-sm text-muted">Or enter an amount</label>
+                    <div className="flex items-center rounded-xl border border-line bg-background/60 px-3 focus-within:border-orchid">
+                      <span className="text-muted">$</span>
+                      <input
+                        id="budget"
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step="any"
+                        placeholder="1000"
+                        value={budget}
+                        onChange={(e) => {
+                          setBucketId(null);
+                          setBudget(e.target.value);
+                        }}
+                        className="tabular w-28 bg-transparent px-1.5 py-2 text-right outline-none focus-visible:!outline-none placeholder:text-muted/60"
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
             </fieldset>
