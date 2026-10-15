@@ -61,7 +61,7 @@ export function StockUpload<S>({ onState }: { onState: (s: S) => void }) {
           }}
         />
         <span className="text-sm font-semibold">{busy ? "Reading your stock sheet…" : "Drop in your stock sheet"}</span>
-        <span className="mt-1 text-xs text-muted">Excel or CSV, any layout. I&apos;ll update the counts below.</span>
+        <span className="mt-1 text-xs text-muted">Excel or CSV. Updates the counts below.</span>
       </label>
 
       {error && <p className="mt-2 text-sm text-[#ff8aa3]">{error}</p>}

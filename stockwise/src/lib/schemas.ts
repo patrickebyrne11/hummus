@@ -17,12 +17,31 @@ export const InventoryItemSchema = z.object({
     .string()
     .nullable()
     .describe(
-      "Any conversion or interpretation you had to make, in one short sentence. null if none.",
+      "Any conversion or guess you had to make, as a short phrase (e.g. '1 case = 1,000 cups'). null if none.",
     ),
+  // Stock position, when the input gives it. Shortage is worked out by the server, not the model.
+  onHand: z.number().nullable().optional(),
+  par: z.number().nullable().optional(),
+  shortage: z.enum(["out", "severe", "low"]).nullable().optional(),
+});
+
+/** What the model fills in when reading a list: the item plus its stock position. */
+export const ParsedItemSchema = InventoryItemSchema.omit({ shortage: true }).extend({
+  onHand: z
+    .number()
+    .nullable()
+    .describe("Amount currently in stock, in the canonical unit. null if the input doesn't say."),
+  par: z
+    .number()
+    .nullable()
+    .describe("Target / par level, in the canonical unit. null if the input doesn't say."),
+  flaggedUrgent: z
+    .boolean()
+    .describe("true if the input says this item is out, nearly out, or urgent"),
 });
 
 export const ParsedInventorySchema = z.object({
-  items: z.array(InventoryItemSchema),
+  items: z.array(ParsedItemSchema),
   skipped: z
     .array(z.string())
     .describe("Rows or lines that are not purchasable stock items, with a short reason"),
@@ -32,7 +51,9 @@ export type InventoryItem = z.infer<typeof InventoryItemSchema>;
 
 export const DealOptionSchema = z.object({
   sku: z.string().describe("Exact SKU from the catalog"),
-  why: z.string().describe("One sentence on why this option fits or what the trade-off is"),
+  why: z
+    .string()
+    .describe("Why this option, as a short plain phrase of at most 8 words, e.g. 'Cheapest per kg, same grade'"),
 });
 
 export const ItemDealsSchema = z.object({
@@ -44,7 +65,7 @@ export const ItemDealsSchema = z.object({
   note: z
     .string()
     .nullable()
-    .describe("Anything Bob should know: quality differences, no match found, substitutions"),
+    .describe("Only if needed: a short plain phrase about a catch, e.g. 'Retail carton, not barista'. null otherwise"),
 });
 
 export const DealsResultSchema = z.object({

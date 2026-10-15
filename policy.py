@@ -54,7 +54,7 @@ def choose_supplier(quotes: list[dict]) -> tuple[dict | None, list[dict]]:
     skipped, eligible = [], []
     for q in quotes:
         if q["supplier"] not in APPROVED_SUPPLIERS:
-            skipped.append({**q, "clause": "§2", "reason": "supplier not approved"})
+            skipped.append({**q, "clause": "§2", "reason": "not approved"})
         elif not q.get("in_stock", True):
             skipped.append({**q, "clause": "§7", "reason": "out of stock"})
         else:
@@ -64,7 +64,7 @@ def choose_supplier(quotes: list[dict]) -> tuple[dict | None, list[dict]]:
     best = min(eligible, key=lambda q: q["unit_price"])
     for q in eligible:
         if q is not best:
-            skipped.append({**q, "clause": "§7", "reason": f"£{q['unit_price']:.2f} > £{best['unit_price']:.2f}"})
+            skipped.append({**q, "clause": "§7", "reason": "dearer"})
     return best, skipped
 
 
@@ -83,25 +83,24 @@ def evaluate(stock_item: dict, supplier: str, qty: int, unit_price: float,
 
     if not is_low(stock_item):
         return Decision(NO_ACTION, ["§1"], evidence,
-                        f"stock {stock_item['qty']} is not below reorder level {stock_item['reorder_level']}")
+                        f"{stock_item['qty']} in stock, reorder below {stock_item['reorder_level']}")
     if qty <= 0:
-        return Decision(NO_ACTION, ["§1"], evidence, "nothing to order: already at par")
+        return Decision(NO_ACTION, ["§1"], evidence, "Already at par")
 
     if supplier not in APPROVED_SUPPLIERS:
-        return Decision(BLOCKED, ["§2"], evidence, f"{supplier} is not an approved supplier")
+        return Decision(BLOCKED, ["§2"], evidence, f"{supplier} isn't an approved supplier")
 
     if uplift > PRICE_TOLERANCE:
         return Decision(BLOCKED, ["§6", "§1"], evidence,
-                        f"unit price £{unit_price:.2f} is {uplift*100:.1f}% above last paid £{last:.2f} "
-                        f"(limit {PRICE_TOLERANCE*100:.0f}%); escalated to owner")
+                        f"£{unit_price:.2f} is {uplift*100:.1f}% over last price £{last:.2f}. Limit is {PRICE_TOLERANCE*100:.0f}%")
 
     if spent_today + total > DAILY_CAP:
         return Decision(BLOCKED, ["§5", "§1"], evidence,
-                        f"£{spent_today:.2f} already spent today + £{total:.2f} would exceed the £{DAILY_CAP:.0f} daily cap")
+                        f"Would take today's spend past £{DAILY_CAP:.0f}")
 
     if total > AUTO_APPROVE_LIMIT:
         return Decision(NEEDS_APPROVAL, ["§4", "§1", "§7"], evidence,
-                        f"£{total:.2f} is over the £{AUTO_APPROVE_LIMIT:.0f} auto-approve limit; owner approval required")
+                        f"£{total:.2f} is over £{AUTO_APPROVE_LIMIT:.0f}, needs your OK")
 
     return Decision(AUTO_BUY, ["§3", "§1", "§7"], evidence,
-                    f"£{total:.2f} is within the £{AUTO_APPROVE_LIMIT:.0f} auto-approve limit from cheapest approved supplier")
+                    f"Under £{AUTO_APPROVE_LIMIT:.0f}, cheapest approved supplier")

@@ -51,12 +51,12 @@ const gbp = (n: number) => n.toLocaleString("en-GB", { style: "currency", curren
 
 const ACTIONS: Record<string, { label: string; tone: "good" | "warn" | "bad" | "muted" }> = {
   auto_buy: { label: "Auto-bought", tone: "good" },
-  approved: { label: "Approved & paid", tone: "good" },
-  needs_approval: { label: "Needs your approval", tone: "warn" },
-  already_pending: { label: "Already awaiting approval", tone: "warn" },
-  blocked: { label: "Blocked & escalated", tone: "bad" },
-  rejected: { label: "Rejected by owner", tone: "muted" },
-  no_action: { label: "No action needed", tone: "muted" },
+  approved: { label: "Approved", tone: "good" },
+  needs_approval: { label: "Needs approval", tone: "warn" },
+  already_pending: { label: "Already queued", tone: "warn" },
+  blocked: { label: "Blocked", tone: "bad" },
+  rejected: { label: "Rejected", tone: "muted" },
+  no_action: { label: "OK", tone: "muted" },
 };
 
 const TONE: Record<string, string> = {
@@ -121,8 +121,8 @@ export function BeanCounter() {
       verb === "reject"
         ? `Rejected ${d.item_name} from ${d.supplier}.`
         : out.payment_intent
-          ? `Paid ${gbp(out.total)} to ${out.supplier}. Stripe ${out.payment_intent}`
-          : `The policy guard blocked it: ${out.reasoning}`,
+          ? `Paid ${gbp(out.total)} to ${out.supplier}.`
+          : `Blocked: ${out.reasoning}`,
     );
   }
 
@@ -178,11 +178,10 @@ export function BeanCounter() {
         <section className="relative isolate -mx-4 px-4 pb-2 sm:-mx-6 sm:px-6">
           <div className="rings absolute inset-0 -z-10" aria-hidden />
           <h1 className="max-w-3xl font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl">
-            <span className="gradient-text">Your finance team, Bob.</span>
+            <span className="gradient-text">Restocking</span>
           </h1>
-          <p className="mt-4 max-w-2xl text-lg leading-relaxed text-muted">
-            BeanCounter watches your stock, buys from the cheapest approved supplier, and stays inside your written
-            policy. Small orders go through on their own. Big ones wait for you. Every pound points back to a clause.
+          <p className="mt-3 max-w-2xl text-muted">
+            Orders up to £75 go through. Anything bigger waits for you.
           </p>
         </section>
 
@@ -191,9 +190,9 @@ export function BeanCounter() {
         {m && (
           <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Metric label="Spent today" value={gbp(m.spent_today)} hint="§5" />
-            <Metric label="Daily cap left" value={gbp(m.daily_cap - m.spent_today)} hint={`of ${gbp(m.daily_cap)}`} />
-            <Metric label="Auto-approve up to" value={gbp(m.auto_limit)} hint="§3 / §4" />
-            <Metric label="Waiting for you" value={String(state.pending.length)} hint="approvals" />
+            <Metric label="Left today" value={gbp(m.daily_cap - m.spent_today)} hint={`of ${gbp(m.daily_cap)}`} />
+            <Metric label="Auto-buy up to" value={gbp(m.auto_limit)} hint="§3 / §4" />
+            <Metric label="To approve" value={String(state.pending.length)} hint="orders" />
           </div>
         )}
 
@@ -250,21 +249,21 @@ export function BeanCounter() {
                 <StockUpload<State> onState={setState} />
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <PrimaryButton onClick={runAgent} disabled={busy !== null} loading={busy === "run"} loadingLabel="Checking stock, quotes and policy…">
-                  Run BeanCounter
+                <PrimaryButton onClick={runAgent} disabled={busy !== null} loading={busy === "run"} loadingLabel="Running…">
+                  Run now
                 </PrimaryButton>
                 <button
                   onClick={() => mutate("/simulate")}
                   disabled={busy !== null}
                   className="rounded-full border border-line px-4 py-2.5 text-sm text-muted transition hover:text-foreground disabled:opacity-40"
                 >
-                  Simulate a morning rush
+                  Morning rush
                 </button>
               </div>
             </Card>
 
             {lastRun.length > 0 && (
-              <Card title="What I just did" step={2}>
+              <Card title="Last run" step={2}>
                 <div className="space-y-3">
                   {lastRun.map((d) => (
                     <DecisionCard key={d.id} d={d} piUrl={piUrl} />
@@ -276,9 +275,9 @@ export function BeanCounter() {
 
           {/* ------------------------------------------------ right column */}
           <div className="space-y-6">
-            <Card title="Waiting for your approval" step={3}>
+            <Card title="To approve" step={3}>
               {flash && <Banner tone={flash.startsWith("Paid") ? "good" : "warn"}>{flash}</Banner>}
-              {state && state.pending.length === 0 && <p className="text-sm text-muted">Nothing waiting for you.</p>}
+              {state && state.pending.length === 0 && <p className="text-sm text-muted">Nothing to approve.</p>}
               <div className="space-y-3">
                 {state?.pending.map((d) => (
                   <div key={d.id} className="gradient-border rounded-2xl p-4">
@@ -309,7 +308,7 @@ export function BeanCounter() {
               </div>
             </Card>
 
-            <Card title="Ask why" step={4}>
+            <Card title="Why?" step={4}>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -343,12 +342,12 @@ export function BeanCounter() {
               {why && (
                 <div className="mt-4 space-y-3">
                   <div className="text-xs uppercase tracking-wide text-muted">
-                    Answered from {why.source === "cognee" ? "Cognee memory" : "the audit log"}
+                    From {why.source === "cognee" ? "Cognee memory" : "the audit log"}
                   </div>
                   <p className="whitespace-pre-line text-sm leading-relaxed">{why.answer}</p>
                   {why.source === "cognee" && why.evidence && (
                     <details open className="rounded-2xl border border-line bg-background/40 p-3">
-                      <summary className="cursor-pointer text-xs text-muted">Evidence from the audit log</summary>
+                      <summary className="cursor-pointer text-xs text-muted">Audit log record</summary>
                       <p className="mt-2 whitespace-pre-line text-xs leading-relaxed text-foreground/80">{why.evidence}</p>
                     </details>
                   )}
@@ -361,7 +360,7 @@ export function BeanCounter() {
         <div className="mt-6">
           <Card title="Audit log" step={5}>
             {state && state.log.length === 0 ? (
-              <p className="text-sm text-muted">No decisions yet. Run BeanCounter.</p>
+              <p className="text-sm text-muted">Nothing yet.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="tabular w-full text-sm">
@@ -408,7 +407,7 @@ export function BeanCounter() {
         {state && (
           <details className="mt-6 rounded-3xl border border-line bg-surface/80 p-5 backdrop-blur">
             <summary className="cursor-pointer font-display font-semibold">
-              Purchasing policy <span className="ml-2 text-sm font-normal text-muted">enforced in code, not just the prompt</span>
+              Buying rules <span className="ml-2 text-sm font-normal text-muted">checked in code before every payment</span>
             </summary>
             <ul className="mt-3 space-y-1.5 text-sm">
               {state.policy.map((p) => (
@@ -449,7 +448,7 @@ function DecisionCard({ d, piUrl }: { d: Decision; piUrl: (pi: string) => string
       ))}
       {d.payment_intent && (
         <a href={piUrl(d.payment_intent)} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-glacier underline-offset-4 hover:underline">
-          View payment in Stripe: {d.payment_intent}
+          Stripe payment ↗
         </a>
       )}
     </article>

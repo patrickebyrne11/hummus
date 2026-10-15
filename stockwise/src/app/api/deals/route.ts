@@ -20,6 +20,8 @@ const SYSTEM = `You are a purchasing agent for Bob, who runs an independent coff
 - Consider delivery time and supplier minimum order; consolidating items onto fewer suppliers is a plus.
 - Only use SKUs whose canonical unit matches the item's unit.
 
+Write like a busy shop manager: short plain phrases, no full sentences, no filler, don't address Bob by name.
+
 For each item, list up to 3 suitable options (best first) and pick a recommendedSku. If nothing in the catalog fits, return no options and explain in "note". Never invent SKUs.
 
 ${catalogForPrompt()}`;
@@ -79,28 +81,22 @@ function describe(it: InventoryItem, i: number) {
 
 const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
-/** The plan summary, built from the server-priced deals so every number is exact. */
+/** One-line plan summary, built from the server-priced deals so every number is exact. */
 function summarise(deals: ItemDeal[]) {
   const picked = deals.flatMap((d) => {
     const o = d.options.find((x) => x.sku === d.recommendedSku);
     return o ? [{ d, o }] : [];
   });
   const total = picked.reduce((s, p) => s + p.o.total, 0);
-  const suppliers = new Set(picked.map((p) => p.o.supplierName));
+  const suppliers = new Set(picked.map((p) => p.o.supplierName)).size;
   const comparable = picked.filter((p) => p.d.currentCost != null);
   const saving = comparable.reduce((s, p) => s + (p.d.currentCost! - p.o.total), 0);
   const missing = deals.filter((d) => !d.recommendedSku).map((d) => d.item.name);
-  const parts = [
-    `I found a best deal for ${picked.length} of ${deals.length} items across ${suppliers.size} supplier${suppliers.size === 1 ? "" : "s"}, ${usd(total)} in total.`,
-  ];
+  const parts = [`${picked.length} of ${deals.length} items, ${suppliers} supplier${suppliers === 1 ? "" : "s"}, ${usd(total)}.`];
   if (comparable.length > 0) {
-    parts.push(
-      saving >= 0
-        ? `On the ${comparable.length} items where you told me today's price, that saves ${usd(saving)}.`
-        : `On the ${comparable.length} items where you told me today's price, that costs ${usd(-saving)} more, usually for better quality.`,
-    );
+    parts.push(saving >= 0 ? `${usd(saving)} under what you pay now.` : `${usd(-saving)} over what you pay now.`);
   }
-  if (missing.length > 0) parts.push(`Nothing in the catalog fits: ${missing.join(", ")}.`);
+  if (missing.length > 0) parts.push(`No match for ${missing.join(", ")}.`);
   return parts.join(" ");
 }
 

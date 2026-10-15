@@ -72,7 +72,7 @@ def run() -> list[dict]:
         if best is None:
             dec = policy.Decision(policy.BLOCKED if policy.is_low(s) else policy.NO_ACTION,
                                   ["§2", "§7"], {"qty": s["qty"], "reorder_level": s["reorder_level"]},
-                                  "no approved supplier has stock", skipped)
+                                  "No approved supplier has it", skipped)
             supplier, price = None, 0.0
         else:
             supplier, price = best["supplier"], best["unit_price"]
@@ -84,7 +84,7 @@ def run() -> list[dict]:
             spent += rec["total"]
         elif dec.action == policy.NEEDS_APPROVAL and (item_id, supplier, qty) in already_pending:
             rec.update(action="already_pending", status="done",
-                       reasoning="identical order is already awaiting owner approval")
+                       reasoning="Already waiting for your OK")
         memory.record_decision(rec)
         results.append(rec)
     return results
@@ -105,18 +105,18 @@ def approve(decision_id: str) -> dict:
     new = {**rec, "id": uuid.uuid4().hex[:8], "parent_id": rec["id"], "status": "done"}
     if dec.action in (policy.NEEDS_APPROVAL, policy.AUTO_BUY):
         new.update(action="approved", clause_ids=["§4"] + [c for c in rec["clause_ids"] if c != "§4"],
-                   reasoning=f"owner approved: {rec['reasoning']}")
+                   reasoning="Approved by owner")
         _execute_purchase(new, stock, approved_by="owner")
     else:  # the world changed since it was queued (e.g. daily cap): guard wins
         new.update(action=policy.BLOCKED, clause_ids=dec.clause_ids, evidence=dec.evidence,
-                   reasoning=f"owner approved but guard blocked: {dec.reasoning}")
+                   reasoning=f"Approved, but blocked: {dec.reasoning}")
     return memory.record_decision(new)
 
 
 def reject(decision_id: str, note: str = "") -> dict:
     rec = _find_pending(decision_id)
     new = {**rec, "id": uuid.uuid4().hex[:8], "parent_id": rec["id"], "status": "done",
-           "action": "rejected", "approved_by": "owner", "reasoning": f"owner rejected. {note}".strip()}
+           "action": "rejected", "approved_by": "owner", "reasoning": f"Rejected by owner. {note}".strip()}
     return memory.record_decision(new)
 
 

@@ -12,22 +12,22 @@ type Selection = Record<number, { included: boolean; sku: string | null }>;
 
 const STORAGE_KEY = "stockwise:v1";
 
-const SAMPLE = `Espresso beans – 18 kg, we pay $24/kg from BeanCo
-Oat milk (barista) – 40 L at $3.10/L
-Whole milk 120 litres
-12oz compostable hot cups: 4 cases of 1000, paying $85/case
-Hot lids x 4000
-Vanilla syrup – 6 bottles (750 ml)
-Chai concentrate 10 L
-Frozen croissants, 180 for the week
-Napkins – 1 case
+const SAMPLE = `Espresso beans: 4 kg left, par 20 kg, $24/kg from BeanCo
+Oat milk (barista): 8 L left, par 48 L, $3.10/L
+Whole milk: 18 L left, par 120 L
+12oz compostable hot cups: 600 left, par 4000, $85 per case of 1000
+Hot lids: 900 left, par 4000
+Vanilla syrup: 1 bottle left (750 ml), par 6
+Chai concentrate: out
+Frozen croissants: 20 left, par 200
+Napkins: 1 case
 Espresso machine cleaning powder`;
 
 const STEPS: { id: Step | "pay"; label: string }[] = [
-  { id: "input", label: "Your stock" },
-  { id: "confirm", label: "Check the list" },
-  { id: "deals", label: "Review deals" },
-  { id: "pay", label: "Approve & pay" },
+  { id: "input", label: "Stock" },
+  { id: "confirm", label: "Check list" },
+  { id: "deals", label: "Deals" },
+  { id: "pay", label: "Pay" },
 ];
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
@@ -224,11 +224,10 @@ export function Stockwise() {
             <div className="relative isolate -mx-4 px-4 pb-2 sm:-mx-6 sm:px-6">
               <div className="rings absolute inset-0 -z-10" aria-hidden />
               <h1 className="max-w-3xl font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
-                <span className="gradient-text">What are you running low on, Bob?</span>
+                <span className="gradient-text">What&apos;s running low?</span>
               </h1>
               <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted">
-                Type your list however you like, or upload your stock sheet. I&apos;ll work out what to
-                buy and find the best deals across your suppliers. Nothing is bought until you approve it.
+                Paste a list or drop in your stock sheet. Nothing is bought until you say so.
               </p>
             </div>
 
@@ -243,7 +242,7 @@ export function Stockwise() {
                     mode === m ? "bg-foreground text-background" : "text-muted hover:text-foreground"
                   }`}
                 >
-                  {m === "type" ? "Type it in" : "Upload a spreadsheet"}
+                  {m === "type" ? "Type" : "Upload sheet"}
                 </button>
               ))}
             </div>
@@ -261,7 +260,7 @@ export function Stockwise() {
                   />
                   <div className="flex items-center justify-between border-t border-line px-4 py-3">
                     <button onClick={() => setText(SAMPLE)} className="text-sm font-medium text-glacier hover:underline underline-offset-4">
-                      Try a sample café list
+                      Use sample list
                     </button>
                     <span className="tabular text-xs text-muted">{text.split("\n").filter((l) => l.trim()).length} lines</span>
                   </div>
@@ -274,12 +273,12 @@ export function Stockwise() {
                     className="sr-only"
                     onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                   />
-                  <span className="font-display text-lg font-semibold">{file ? file.name : "Drop in your stock sheet"}</span>
+                  <span className="font-display text-lg font-semibold">{file ? file.name : "Drop your stock sheet here"}</span>
                   <span className="text-sm text-muted">
-                    {file ? `${(file.size / 1024).toFixed(1)} KB, click to change` : "Excel, CSV or ODS up to 5 MB. Any column layout works."}
+                    {file ? `${(file.size / 1024).toFixed(1)} KB · click to change` : "Excel, CSV or ODS, up to 5 MB"}
                   </span>
                   <a href="/sample-inventory.xlsx" onClick={(e) => e.stopPropagation()} className="mt-3 text-sm font-medium text-glacier underline-offset-4 hover:underline">
-                    Download a sample sheet
+                    Sample sheet
                   </a>
                 </label>
               )}
@@ -290,9 +289,9 @@ export function Stockwise() {
                 onClick={readList}
                 disabled={busy !== null || (mode === "type" ? !text.trim() : !file)}
                 loading={busy === "parse"}
-                loadingLabel="Reading your list…"
+                loadingLabel="Reading…"
               >
-                Read my list
+                Read list
               </PrimaryButton>
             </div>
           </section>
@@ -300,18 +299,43 @@ export function Stockwise() {
 
         {step === "confirm" && (
           <section>
-            <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">Here&apos;s what I understood</h1>
-            <p className="mt-3 text-muted">Check the quantities before I go shopping. You can edit or remove anything.</p>
+            <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">Your list</h1>
+            <p className="mt-3 text-muted">Check the amounts to buy. Edit or remove anything.</p>
+
+            {(() => {
+              const short = items.filter((it) => it.shortage === "out" || it.shortage === "severe");
+              if (short.length === 0) return null;
+              return (
+                <div className="mt-6 rounded-3xl border border-[#ff6b8a]/30 bg-[#ff6b8a]/10 p-5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <h2 className="font-display text-lg font-semibold text-[#ff8aa3]">Running out</h2>
+                    <span className="tabular text-sm text-[#ff8aa3]/80">{short.length} item{short.length === 1 ? "" : "s"}</span>
+                  </div>
+                  <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {short.map((it, i) => (
+                      <li key={i} className="flex items-center justify-between gap-3 rounded-2xl bg-background/50 px-4 py-2.5 text-sm">
+                        <span className="font-medium">{it.name}</span>
+                        <span className="tabular text-muted">{stockLine(it)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })()}
 
             <ul className="mt-8 divide-y divide-line overflow-hidden rounded-3xl border border-line bg-surface/80 backdrop-blur">
               {items.map((it, i) => (
                 <li key={i} className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4">
                   <div className="min-w-0 flex-1 basis-56">
-                    <div className="font-semibold">{it.name}</div>
-                    {it.assumption && <div className="mt-1 text-sm text-warn">I assumed {lowerFirst(it.assumption)}</div>}
-                    {it.currentUnitPrice != null && (
-                      <div className="tabular mt-1 text-sm text-muted">You pay {usdPrecise(it.currentUnitPrice)} per {it.unit} today</div>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold">{it.name}</span>
+                      {it.shortage && <ShortageTag level={it.shortage} />}
+                    </div>
+                    <div className="tabular mt-1 flex flex-wrap gap-x-3 text-sm text-muted">
+                      {stockLine(it) && <span>{stockLine(it)}</span>}
+                      {it.currentUnitPrice != null && <span>now {usdPrecise(it.currentUnitPrice)}/{it.unit}</span>}
+                      {it.assumption && <span className="text-warn">{it.assumption}</span>}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <input
@@ -340,7 +364,7 @@ export function Stockwise() {
 
             {skipped.length > 0 && (
               <details className="mt-4 text-sm text-muted">
-                <summary className="cursor-pointer">Skipped {skipped.length} line{skipped.length > 1 ? "s" : ""} that aren&apos;t stock</summary>
+                <summary className="cursor-pointer">{skipped.length} line{skipped.length > 1 ? "s" : ""} skipped</summary>
                 <ul className="mt-2 list-disc pl-5">{skipped.map((s, i) => <li key={i}>{s}</li>)}</ul>
               </details>
             )}
@@ -352,7 +376,7 @@ export function Stockwise() {
                 loading={busy === "deals"}
                 loadingLabel="Comparing suppliers…"
               >
-                Find me the best deals
+                Find deals
               </PrimaryButton>
               <button onClick={startOver} className="px-4 py-2 text-sm text-muted hover:text-foreground">
                 Start over
@@ -365,14 +389,14 @@ export function Stockwise() {
           <section>
             <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
               <div>
-                <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">Your best deals</h1>
-                {summary && <p className="mt-4 max-w-2xl text-lg leading-relaxed text-muted">{summary}</p>}
+                <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">Deals</h1>
+                {summary && <p className="tabular mt-3 max-w-2xl text-muted">{summary}</p>}
               </div>
               {totals.comparableCount > 0 && totals.savings > 0 && (
                 <div className="gradient-border rounded-3xl px-6 py-5">
                   <div className="text-sm text-muted">You save</div>
                   <div className="tabular gradient-text font-display text-4xl font-bold">{usd(totals.savings)}</div>
-                  <div className="mt-1 text-xs text-muted">compared with today&apos;s prices on {totals.comparableCount} items</div>
+                  <div className="mt-1 text-xs text-muted">vs current prices, {totals.comparableCount} items</div>
                 </div>
               )}
             </div>
@@ -381,8 +405,7 @@ export function Stockwise() {
               <div className="mt-6">
                 {totals.underMinimum.map((s) => (
                   <Banner key={s.id}>
-                    {s.name} needs a {usd(s.minOrderUsd)} minimum order, and this order only comes to {usd(s.subtotal)} with them. Pick
-                    a different option or add more items from them.
+                    {s.name}: {usd(s.minOrderUsd)} minimum, this order is {usd(s.subtotal)}.
                   </Banner>
                 ))}
               </div>
@@ -399,10 +422,13 @@ export function Stockwise() {
                   >
                     <header className="flex flex-wrap items-center justify-between gap-3 px-4 pb-3 pt-3">
                       <div>
-                        <h2 className="font-display text-lg font-semibold">{d.item.name}</h2>
+                        <h2 className="flex flex-wrap items-center gap-2 font-display text-lg font-semibold">
+                          {d.item.name}
+                          {d.item.shortage && <ShortageTag level={d.item.shortage} />}
+                        </h2>
                         <p className="tabular text-sm text-muted">
                           Need {qty(d.item.quantity, d.item.unit)}
-                          {d.currentCost != null && <>, about {usd(d.currentCost)} at today&apos;s price</>}
+                          {d.currentCost != null && <> · {usd(d.currentCost)} at current price</>}
                         </p>
                       </div>
                       {d.options.length > 0 && (
@@ -413,7 +439,7 @@ export function Stockwise() {
                             onChange={(e) => setSel({ included: e.target.checked })}
                             className="size-4 accent-[var(--orchid)]"
                           />
-                          Buy this
+                          Buy
                         </label>
                       )}
                     </header>
@@ -461,10 +487,10 @@ export function Stockwise() {
                                 <span className="text-foreground/80">{o.supplierName}</span>
                                 <span>{o.packs} × {o.packLabel}</span>
                                 <span>{usdPrecise(o.unitPrice)} per {d.item.unit}</span>
-                                <span>Arrives in {o.deliveryDays} day{o.deliveryDays > 1 ? "s" : ""}</span>
+                                <span>{o.deliveryDays} day{o.deliveryDays > 1 ? "s" : ""}</span>
                                 <span>★ {o.rating}</span>
                               </div>
-                              <p className="mt-2 text-sm leading-relaxed">{o.why}</p>
+                              <p className="mt-1.5 text-sm text-foreground/80">{o.why}</p>
                             </div>
                           </label>
                         );
@@ -476,7 +502,7 @@ export function Stockwise() {
             </div>
 
             <button onClick={startOver} className="mt-8 text-sm text-muted hover:text-foreground">
-              Start a new list
+              New list
             </button>
           </section>
         )}
@@ -488,8 +514,8 @@ export function Stockwise() {
             <div>
               <div className="tabular font-display text-xl font-semibold">{usd(totals.newSpend)}</div>
               <div className="hidden text-sm text-muted sm:block">
-                {chosen.length} item{chosen.length === 1 ? "" : "s"} from {totals.bySupplier.size} supplier
-                {totals.bySupplier.size === 1 ? "" : "s"}. You&apos;ll confirm payment on Stripe.
+                {chosen.length} item{chosen.length === 1 ? "" : "s"} · {totals.bySupplier.size} supplier
+                {totals.bySupplier.size === 1 ? "" : "s"} · pay on Stripe
               </div>
             </div>
             <PrimaryButton
@@ -498,7 +524,7 @@ export function Stockwise() {
               loading={busy === "checkout"}
               loadingLabel="Opening checkout…"
             >
-              Approve and buy
+              Approve &amp; pay
             </PrimaryButton>
           </div>
         </div>
@@ -507,8 +533,18 @@ export function Stockwise() {
   );
 }
 
-function lowerFirst(s: string) {
-  return s.charAt(0).toLowerCase() + s.slice(1);
+function stockLine(it: InventoryItem) {
+  if (it.onHand == null) return it.shortage === "out" ? "none left" : "";
+  const unit = it.unit === "unit" ? "" : ` ${it.unit}`;
+  const left = `${qty(it.onHand, it.unit).replace(/ (units?|kg|L)$/, "")}${unit} left`;
+  return it.par != null ? `${left} of ${qty(it.par, it.unit).replace(/ (units?|kg|L)$/, "")}${unit}` : left;
+}
+
+function ShortageTag({ level }: { level: NonNullable<InventoryItem["shortage"]> }) {
+  const style =
+    level === "low" ? "bg-warn/15 text-warn" : "bg-[#ff6b8a]/15 text-[#ff8aa3]";
+  const label = level === "out" ? "Out" : level === "severe" ? "Very low" : "Low";
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${style}`}>{label}</span>;
 }
 
 function PrimaryButton(props: {
