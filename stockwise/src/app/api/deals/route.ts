@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       schema: DealsResultSchema,
       system: SYSTEM,
       user: `Bob's list:\n${list}`,
-      effort: "medium",
+      effort: "low",
     });
 
     // The model picks products; the server does all the money math from the catalog.
