@@ -1,36 +1,22 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Stockwise
 
-## Getting Started
+An AI purchasing agent for independent cafés. Bob (a coffee shop owner) gives it his stock list, the agent finds the best wholesale deals, Bob reviews them, and nothing is bought until he approves and pays.
 
-First, run the development server:
+## Flow
+
+1. **Your stock**: Bob types a free-form list or uploads an `.xlsx` / `.xls` / `.csv` / `.ods` sheet in any layout.
+2. **Check the list**: Claude (`/api/parse`) extracts what to buy, normalises units (kg / L / unit), works out *par − on hand*, and flags its assumptions. Bob can edit quantities or remove items.
+3. **Review deals**: Claude (`/api/deals`) picks up to three suitable catalog products per item and recommends one. The **server** computes pack counts, totals and savings from the catalog, so prices never come from the model. Bob can switch options, untick items, and see supplier-minimum warnings.
+4. **Approve & pay**: `/api/checkout` creates a Stripe Checkout session (**test-mode keys only**; live keys are refused). `/orders` shows the paid order split into one purchase order per supplier.
+
+The supplier catalog is mock data in `src/lib/catalog.ts`. Model output is never stubbed: without an API key, the routes return a clear error.
+
+## Setup
 
 ```bash
+cp .env.example .env.local   # add ANTHROPIC_API_KEY and a Stripe sk_test_ key
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Pay with the Stripe test card `4242 4242 4242 4242`, any future expiry date, and any CVC. `public/sample-inventory.xlsx` is a deliberately messy stock-count sheet you can use for testing.
