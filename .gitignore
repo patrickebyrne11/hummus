@@ -1,0 +1,23 @@
+# secrets
+.env
+
+# python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# IDE
+.idea/
+.vscode/
+
+# per-account Stripe ids written by seed.py
+data/shop.json
+
+# cognee local storage
+.cognee_system/
+.data_storage/
+cognee_db/
+.artifacts/
+
+.DS_Store

@@ -1,0 +1,9 @@
+[
+  {"supplier": "Metro Wholesale", "item": "oat_milk_l",      "unit_price": 1.55, "in_stock": true},
+  {"supplier": "FreshDairy Co",   "item": "oat_milk_l",      "unit_price": 1.70, "in_stock": true},
+  {"supplier": "BeanDirect",      "item": "coffee_beans_kg", "unit_price": 13.50, "in_stock": true},
+  {"supplier": "Metro Wholesale", "item": "coffee_beans_kg", "unit_price": 15.20, "in_stock": true},
+  {"supplier": "CheapBeans Ltd",  "item": "coffee_beans_kg", "unit_price": 9.00,  "in_stock": true},
+  {"supplier": "Metro Wholesale", "item": "croissants",      "unit_price": 11.50, "in_stock": true},
+  {"supplier": "Metro Wholesale", "item": "cups_12oz",       "unit_price": 6.40,  "in_stock": true}
+]

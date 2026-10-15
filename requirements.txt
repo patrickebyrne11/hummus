@@ -1,0 +1,5 @@
+streamlit
+stripe
+cognee
+python-dotenv
+anthropic
