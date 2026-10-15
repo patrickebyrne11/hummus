@@ -64,7 +64,7 @@ export function StockUpload<S>({ onState }: { onState: (s: S) => void }) {
         <span className="mt-1 text-xs text-muted">Excel or CSV. Updates the counts below.</span>
       </label>
 
-      {error && <p className="mt-2 text-sm text-[#ff8aa3]">{error}</p>}
+      {error && <p className="mt-2 text-sm text-[#b8264c]">{error}</p>}
       {result && (
         <div className="mt-2 text-xs text-muted">
           Updated {result.updates.length} item{result.updates.length === 1 ? "" : "s"} from your sheet

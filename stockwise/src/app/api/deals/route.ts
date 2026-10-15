@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { catalogForPrompt, productBySku, supplierById } from "@/lib/catalog";
 import {
+  BudgetSchema,
   DealsResultSchema,
   InventoryItemSchema,
   type InventoryItem,
@@ -8,8 +9,12 @@ import {
   type PricedOption,
 } from "@/lib/schemas";
 import { UserFacingError, errorResponse, structuredCall } from "@/lib/claude";
+import { demoDeals, isDemo } from "@/lib/demo";
 
-const RequestSchema = z.object({ items: z.array(InventoryItemSchema).min(1).max(150) });
+const RequestSchema = z.object({
+  items: z.array(InventoryItemSchema).min(1).max(150),
+  budget: BudgetSchema,
+});
 
 const SYSTEM = `You are a purchasing agent for Bob, who runs an independent coffee shop. Your job is to find Bob the best deal for each item on his list from the wholesale catalog below.
 
@@ -110,6 +115,7 @@ export async function POST(request: Request) {
     const body = RequestSchema.safeParse(await request.json());
     if (!body.success) throw new UserFacingError("Invalid item list.");
     const { items } = body.data;
+    const budget = body.data.budget ?? null;
 
     const groups: { item: InventoryItem; i: number }[][] = [];
     items.forEach((item, i) => {
@@ -117,15 +123,20 @@ export async function POST(request: Request) {
       groups[groups.length - 1].push({ item, i });
     });
 
-    const groupResults = await mapLimit(groups, MAX_PARALLEL, (g) =>
-      structuredCall({
-        schema: GroupResultSchema,
-        system: SYSTEM,
-        user: `Items from Bob's list (keep these index numbers as itemIndex):\n${g.map(({ item, i }) => describe(item, i)).join("\n")}`,
-        effort: "low",
-      }),
-    );
-    const result = { items: groupResults.flatMap((r) => r.items) };
+    const result = isDemo()
+      ? demoDeals(items)
+      : {
+          items: (
+            await mapLimit(groups, MAX_PARALLEL, (g) =>
+              structuredCall({
+                schema: GroupResultSchema,
+                system: SYSTEM,
+                user: `Items from Bob's list (keep these index numbers as itemIndex):\n${g.map(({ item, i }) => describe(item, i)).join("\n")}`,
+                effort: "low",
+              }),
+            )
+          ).flatMap((r) => r.items),
+        };
 
     // The model picks products; the server does all the money math from the catalog.
     const byIndex = new Map(result.items.map((d) => [d.itemIndex, d]));
@@ -148,8 +159,46 @@ export async function POST(request: Request) {
       };
     });
 
-    return Response.json({ deals, summary: summarise(deals) });
+    // Groups run in parallel and none sees the whole order, so the budget is applied here,
+    // across all items, before the summary is written from the final picks.
+    const budgetNote = budget ? fitToBudget(deals, budget) : null;
+    const summary = [summarise(deals), budgetNote].filter(Boolean).join(" ");
+    return Response.json({ deals, summary, mode: isDemo() ? "demo" : "ai" });
   } catch (err) {
     return errorResponse(err);
   }
+}
+
+/**
+ * Budget safety net: if the recommended picks exceed the budget, switch items to cheaper
+ * options (biggest saving first) until the order fits or nothing cheaper is left.
+ * Mutates `deals`; returns a short note for the summary, or null if nothing changed.
+ */
+function fitToBudget(deals: ItemDeal[], budget: number): string | null {
+  const picked = (d: ItemDeal) => d.options.find((o) => o.sku === d.recommendedSku);
+  const total = () => deals.reduce((s, d) => s + (picked(d)?.total ?? 0), 0);
+  let switched = 0;
+
+  while (total() > budget + 0.005) {
+    let best: { d: ItemDeal; sku: string; saving: number } | null = null;
+    for (const d of deals) {
+      const current = picked(d);
+      if (!current) continue;
+      for (const o of d.options) {
+        const saving = current.total - o.total;
+        if (saving > 0.005 && (!best || saving > best.saving)) best = { d, sku: o.sku, saving };
+      }
+    }
+    if (!best) break;
+    best.d.recommendedSku = best.sku;
+    best.d.note = `Cheaper pick to fit the ${usd(budget)} budget.`;
+    switched++;
+  }
+
+  const final = total();
+  if (final > budget + 0.005) {
+    return `Still ${usd(final - budget)} over the ${usd(budget)} budget at the cheapest options; untick what you can skip.`;
+  }
+  if (switched > 0) return `${switched} item${switched === 1 ? "" : "s"} switched to cheaper options to fit the ${usd(budget)} budget.`;
+  return null;
 }

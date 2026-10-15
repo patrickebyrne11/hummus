@@ -2,6 +2,7 @@ import { productBySku, supplierById } from "@/lib/catalog";
 import { CheckoutRequestSchema } from "@/lib/schemas";
 import { UserFacingError, errorResponse } from "@/lib/claude";
 import { getStripe } from "@/lib/stripe";
+import { encodeDemoOrder } from "@/lib/orders";
 
 export async function POST(request: Request) {
   try {
@@ -26,6 +27,20 @@ export async function POST(request: Request) {
         },
       };
     });
+
+    // The agent never spends more than the budget Bob set.
+    const budget = body.data.budget ?? null;
+    const orderTotal = lineItems.reduce((sum, l) => sum + l.quantity * l.price_data.unit_amount, 0) / 100;
+    if (budget && orderTotal > budget + 0.005) {
+      throw new UserFacingError(
+        `This order comes to $${orderTotal.toFixed(2)}, which is over your $${budget.toFixed(2)} budget.`,
+      );
+    }
+
+    // Demo mode: without a Stripe key, hand off to the in-app demo checkout instead.
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return Response.json({ url: `/checkout/demo?o=${encodeURIComponent(encodeDemoOrder(body.data.lines))}` });
+    }
 
     const origin = new URL(request.url).origin;
     const session = await getStripe().checkout.sessions.create({

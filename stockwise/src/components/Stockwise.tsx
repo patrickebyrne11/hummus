@@ -131,6 +131,11 @@ export function Stockwise() {
     setScanning(true);
     setTimeout(() => setScanning(false), 1800);
   }
+  const [aiMode, setAiMode] = useState<"ai" | "demo" | null>(null);
+  const [budget, setBudget] = useState("");
+  const [noLimit, setNoLimit] = useState(true);
+  const [dealsBudget, setDealsBudget] = useState<number | null>(null);
+  const budgetNum = !noLimit && Number(budget) > 0 ? Number(budget) : null;
 
   // Restore after a cancelled Stripe checkout so Bob doesn't lose his review.
   // sessionStorage only exists after hydration, so this has to run in an effect.
@@ -146,6 +151,10 @@ export function Stockwise() {
         setDeals(s.deals);
         setSummary(s.summary);
         setSelection(s.selection);
+        setAiMode(s.aiMode ?? null);
+        setBudget(s.budget ?? "");
+        setNoLimit(s.noLimit ?? true);
+        setDealsBudget(s.dealsBudget ?? null);
       }
       setCancelled(new URLSearchParams(window.location.search).has("cancelled"));
     } catch {}
@@ -160,10 +169,10 @@ export function Stockwise() {
     try {
       sessionStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ step, items, skipped, deals, summary, selection }),
+        JSON.stringify({ step, items, skipped, deals, summary, selection, aiMode, budget, noLimit, dealsBudget }),
       );
     } catch {}
-  }, [hydrated, step, items, skipped, deals, summary, selection]);
+  }, [hydrated, step, items, skipped, deals, summary, selection, aiMode, budget, noLimit, dealsBudget]);
 
   async function readList() {
     setError(null);
@@ -177,7 +186,9 @@ export function Stockwise() {
       if (!res.ok) throw new Error(data.error ?? "Couldn't read that list.");
       setItems(data.items);
       setSkipped(data.skipped);
+      setAiMode(data.mode);
       setStep("confirm");
+      window.scrollTo({ top: 0 });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -189,15 +200,18 @@ export function Stockwise() {
     setError(null);
     setBusy("deals");
     try {
-      const data = await postJson<{ deals: ItemDeal[]; summary: string }>("/api/deals", { items });
+      const data = await postJson<{ deals: ItemDeal[]; summary: string; mode: "ai" | "demo" }>("/api/deals", { items, budget: budgetNum });
+      setAiMode(data.mode);
       setDeals(data.deals);
       setSummary(data.summary);
+      setDealsBudget(budgetNum);
       setSelection(
         Object.fromEntries(
           data.deals.map((d, i) => [i, { included: d.recommendedSku !== null, sku: d.recommendedSku }]),
         ),
       );
       setStep("deals");
+      window.scrollTo({ top: 0 });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -225,14 +239,16 @@ export function Stockwise() {
     const underMinimum = SUPPLIERS.filter(
       (s) => bySupplier.has(s.id) && bySupplier.get(s.id)! < s.minOrderUsd,
     ).map((s) => ({ ...s, subtotal: bySupplier.get(s.id)! }));
-    return { newSpend, savings: before - after, comparableCount: comparable.length, bySupplier, underMinimum };
-  }, [chosen]);
+    const overBudget = budgetNum != null ? Math.max(0, newSpend - budgetNum) : 0;
+    return { newSpend, savings: before - after, comparableCount: comparable.length, bySupplier, underMinimum, overBudget };
+  }, [chosen, budgetNum]);
 
   async function approveAndPay() {
     setError(null);
     setBusy("checkout");
     try {
       const { url } = await postJson<{ url: string }>("/api/checkout", {
+        budget: budgetNum,
         lines: chosen.map((c) => ({ sku: c.opt.sku, packs: c.opt.packs })),
       });
       window.location.href = url;
@@ -248,15 +264,24 @@ export function Stockwise() {
     setDeals([]);
     setSelection({});
     setSummary("");
+    setBudget("");
+    setNoLimit(true);
     setError(null);
     setCancelled(false);
+  }
+
+  function goBack(to: Step) {
+    setError(null);
+    setCancelled(false);
+    setStep(to);
+    window.scrollTo({ top: 0 });
   }
 
   const stepIndex = STEPS.findIndex((s) => s.id === step);
 
   return (
     <div className="flex-1">
-      <header className="mx-auto flex max-w-5xl items-center justify-between px-4 py-5 sm:px-6">
+      <header className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-5 sm:px-6">
         <div className="flex items-center gap-3">
           <span className="btn-primary grid size-9 place-items-center rounded-xl font-display text-sm font-bold">S</span>
           <span className="font-display text-lg font-semibold tracking-tight">Stockwise</span>
@@ -266,8 +291,8 @@ export function Stockwise() {
             BeanCounter agent →
           </Link>
           <span className="flex items-center gap-2 rounded-full border border-line bg-surface/60 px-3 py-1 text-xs text-muted backdrop-blur">
-            <span className="size-1.5 rounded-full bg-warn" />
-            Stripe test mode
+            <span className={`size-1.5 rounded-full ${aiMode === "ai" ? "bg-good" : "bg-warn"}`} />
+            {aiMode === "ai" ? "Live AI, Stripe test mode" : aiMode === "demo" ? "Demo mode, sample matching" : "Prototype"}
           </span>
         </div>
       </header>
@@ -296,13 +321,12 @@ export function Stockwise() {
         {error && <Banner>{error}</Banner>}
 
         {step === "input" && (
-          <section>
-            <div className="relative isolate -mx-4 px-4 pb-2 sm:-mx-6 sm:px-6">
-              <div className="rings absolute inset-0 -z-10" aria-hidden />
-              <h1 className="max-w-3xl font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
-                <span className="gradient-text">What&apos;s running low?</span>
+          <section className="mx-auto max-w-3xl text-center">
+            <div>
+              <h1 className="mx-auto max-w-3xl font-display text-4xl font-bold leading-[1.05] tracking-tight sm:text-6xl">
+                What&apos;s running low?
               </h1>
-              <p className="mt-4 max-w-xl text-lg text-muted">Nothing is bought until you approve it.</p>
+              <p className="mx-auto mt-4 max-w-xl text-lg text-muted">Nothing is bought until you approve it.</p>
             </div>
 
             {busy === "parse" ? (
@@ -327,7 +351,7 @@ export function Stockwise() {
               ))}
             </div>
 
-            <div className="mt-4 rounded-3xl border border-line bg-surface/80 p-2 backdrop-blur">
+            <div className="mt-4 rounded-3xl border border-line bg-surface/80 p-2 text-left shadow-xl shadow-black/5 backdrop-blur">
               {mode === "type" ? (
                 <>
                   <textarea
@@ -358,7 +382,7 @@ export function Stockwise() {
                     pickFile(e.dataTransfer.files?.[0] ?? null);
                   }}
                   className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed px-4 py-16 text-center transition hover:border-orchid/60 ${
-                    dragging ? "border-orchid bg-orchid/10" : "border-white/15"
+                    dragging ? "border-orchid bg-orchid/10" : "border-foreground/15"
                   }`}
                 >
                   <input
@@ -371,18 +395,63 @@ export function Stockwise() {
                     <LoaderCard title="Opening your sheet" lines={SCAN_LINES} progress={scanProgress} />
                   ) : (
                     <>
-                  <span className="font-display text-lg font-semibold">{file ? file.name : "Drop your stock sheet"}</span>
-                  <span className="text-sm text-muted">
-                    {file ? `${(file.size / 1024).toFixed(1)} KB · click to change` : "Excel, CSV or ODS"}
-                  </span>
-                  <a href="/sample-inventory.xlsx" onClick={(e) => e.stopPropagation()} className="mt-3 text-sm font-medium text-glacier underline-offset-4 hover:underline">
-                    Sample sheet
-                  </a>
+                      <span className="font-display text-lg font-semibold">{file ? file.name : "Drop your stock sheet"}</span>
+                      <span className="text-sm text-muted">
+                        {file ? `${(file.size / 1024).toFixed(1)} KB · click to change` : "Excel, CSV or ODS"}
+                      </span>
+                      <a href="/sample-inventory.xlsx" onClick={(e) => e.stopPropagation()} className="mt-3 text-sm font-medium text-glacier underline-offset-4 hover:underline">
+                        Sample sheet
+                      </a>
                     </>
                   )}
                 </label>
               )}
             </div>
+
+            <fieldset className="mx-auto mt-6 max-w-md rounded-2xl border border-line bg-surface/80 px-4 py-3 text-left backdrop-blur">
+              <legend className="sr-only">Budget for this order</legend>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-sm font-medium">Budget for this order</span>
+                <div className="inline-flex rounded-full border border-line bg-background/60 p-0.5 text-sm">
+                  {([true, false] as const).map((value) => (
+                    <button
+                      key={String(value)}
+                      type="button"
+                      aria-pressed={noLimit === value}
+                      onClick={() => setNoLimit(value)}
+                      className={`rounded-full px-3 py-1.5 font-medium transition ${
+                        noLimit === value ? "bg-foreground text-background" : "text-muted hover:text-foreground"
+                      }`}
+                    >
+                      {value ? "No limit" : "Set a budget"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {noLimit ? (
+                <p className="mt-2 text-xs text-muted">I&apos;ll find the best value for each item, whatever the total.</p>
+              ) : (
+                <div className="mt-3 flex items-center gap-3">
+                  <div className="flex items-center rounded-xl border border-line bg-background/60 px-3 focus-within:border-orchid">
+                    <span className="text-muted">$</span>
+                    <input
+                      id="budget"
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      step="any"
+                      autoFocus
+                      placeholder="e.g. 1000"
+                      aria-label="Budget amount"
+                      value={budget}
+                      onChange={(e) => setBudget(e.target.value)}
+                      className="tabular w-28 bg-transparent px-1.5 py-2 text-right outline-none placeholder:text-muted/60"
+                    />
+                  </div>
+                  <span className="text-xs text-muted">I&apos;ll keep the order under this.</span>
+                </div>
+              )}
+            </fieldset>
 
             <div className="mt-6">
               <PrimaryButton
@@ -407,6 +476,7 @@ export function Stockwise() {
               </div>
             ) : (
             <>
+            <BackButton onClick={() => goBack("input")}>Stock</BackButton>
             <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">Your list</h1>
             <p className="mt-3 text-muted">Check the amounts to buy. Edit or remove anything.</p>
 
@@ -414,14 +484,14 @@ export function Stockwise() {
               const short = items.filter((it) => it.shortage === "out" || it.shortage === "severe");
               if (short.length === 0) return null;
               return (
-                <div className="mt-6 rounded-3xl border border-[#ff6b8a]/30 bg-[#ff6b8a]/10 p-5">
+                <div className="mt-6 rounded-3xl border border-[#d6335a]/25 bg-[#ff6b8a]/10 p-5">
                   <div className="flex items-baseline justify-between gap-3">
-                    <h2 className="font-display text-lg font-semibold text-[#ff8aa3]">Running out</h2>
-                    <span className="tabular text-sm text-[#ff8aa3]/80">{short.length} item{short.length === 1 ? "" : "s"}</span>
+                    <h2 className="font-display text-lg font-semibold text-[#b8264c]">Running out</h2>
+                    <span className="tabular text-sm text-[#b8264c]/80">{short.length} item{short.length === 1 ? "" : "s"}</span>
                   </div>
                   <ul className="mt-3 grid gap-2 sm:grid-cols-2">
                     {short.map((it, i) => (
-                      <li key={i} className="flex items-center justify-between gap-3 rounded-2xl bg-background/50 px-4 py-2.5 text-sm">
+                      <li key={i} className="flex items-center justify-between gap-3 rounded-2xl bg-surface/80 px-4 py-2.5 text-sm">
                         <span className="font-medium">{it.name}</span>
                         <span className="tabular text-muted">{stockLine(it)}</span>
                       </li>
@@ -461,7 +531,7 @@ export function Stockwise() {
                     <button
                       aria-label={`Remove ${it.name}`}
                       onClick={() => setItems(items.filter((_, j) => j !== i))}
-                      className="grid size-8 place-items-center rounded-full text-muted transition hover:bg-white/5 hover:text-foreground"
+                      className="grid size-8 place-items-center rounded-full text-muted transition hover:bg-foreground/5 hover:text-foreground"
                     >
                       ✕
                     </button>
@@ -497,6 +567,7 @@ export function Stockwise() {
 
         {step === "deals" && (
           <section>
+            <BackButton onClick={() => goBack("confirm")}>Check list</BackButton>
             <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
               <div>
                 <h1 className="font-display text-3xl font-bold tracking-tight sm:text-4xl">Deals</h1>
@@ -505,11 +576,23 @@ export function Stockwise() {
               {totals.comparableCount > 0 && totals.savings > 0 && (
                 <div className="gradient-border rounded-3xl px-6 py-5">
                   <div className="text-sm text-muted">You save</div>
-                  <div className="tabular gradient-text font-display text-4xl font-bold">{usd(totals.savings)}</div>
+                  <div className="tabular font-display text-4xl font-bold">{usd(totals.savings)}</div>
                   <div className="mt-1 text-xs text-muted">vs today, {totals.comparableCount} items</div>
                 </div>
               )}
             </div>
+
+            <BudgetMeter
+              budget={budget}
+              onBudgetChange={setBudget}
+              noLimit={noLimit}
+              onNoLimitChange={setNoLimit}
+              budgetNum={budgetNum}
+              spend={totals.newSpend}
+              stale={budgetNum !== dealsBudget}
+              onRefresh={findDeals}
+              refreshing={busy === "deals"}
+            />
 
             {totals.underMinimum.length > 0 && (
               <div className="mt-6">
@@ -521,98 +604,23 @@ export function Stockwise() {
               </div>
             )}
 
-            <div className="mt-8 space-y-5">
+            <ul className="mt-8 divide-y divide-line overflow-hidden rounded-3xl border border-line bg-surface/80 backdrop-blur">
               {deals.map((d, i) => {
                 const sel = selection[i] ?? { included: false, sku: null };
-                const setSel = (patch: Partial<typeof sel>) => setSelection({ ...selection, [i]: { ...sel, ...patch } });
                 return (
-                  <article
+                  <DealRow
                     key={i}
-                    className={`rounded-3xl border border-line bg-surface/80 p-2 backdrop-blur transition-opacity ${sel.included ? "" : "opacity-50"}`}
-                  >
-                    <header className="flex flex-wrap items-center justify-between gap-3 px-4 pb-3 pt-3">
-                      <div>
-                        <h2 className="flex flex-wrap items-center gap-2 font-display text-lg font-semibold">
-                          {d.item.name}
-                          {d.item.shortage && <ShortageTag level={d.item.shortage} />}
-                        </h2>
-                        <p className="tabular text-sm text-muted">
-                          {qty(d.item.quantity, d.item.unit)}
-                          {d.currentCost != null && <> · now ~{usd(d.currentCost)}</>}
-                        </p>
-                      </div>
-                      {d.options.length > 0 && (
-                        <label className="flex cursor-pointer items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={sel.included}
-                            onChange={(e) => setSel({ included: e.target.checked })}
-                            className="size-4 accent-[var(--orchid)]"
-                          />
-                          Buy
-                        </label>
-                      )}
-                    </header>
-
-                    {d.note && <p className="mx-2 mb-2 rounded-2xl bg-warn/10 px-4 py-2.5 text-sm text-warn">{d.note}</p>}
-
-                    <div className="space-y-1.5">
-                      {d.options.map((o) => {
-                        const active = sel.sku === o.sku;
-                        const saving = d.currentCost != null ? d.currentCost - o.total : null;
-                        return (
-                          <label
-                            key={o.sku}
-                            className={`flex cursor-pointer gap-3 rounded-2xl px-4 py-3.5 transition ${
-                              active ? "gradient-border" : "border border-transparent hover:bg-white/[0.03]"
-                            }`}
-                          >
-                            <input
-                              type="radio"
-                              name={`deal-${i}`}
-                              checked={active}
-                              onChange={() => setSel({ sku: o.sku, included: true })}
-                              className="mt-1 size-4 accent-[var(--orchid)]"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                                <div className="font-semibold">
-                                  {o.productName}
-                                  {o.sku === d.recommendedSku && (
-                                    <span className="btn-primary ml-2 rounded-full px-2.5 py-0.5 align-middle text-xs font-bold">
-                                      Best deal
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="tabular text-right">
-                                  <span className="font-display font-semibold">{usd(o.total)}</span>
-                                  {saving != null && (
-                                    <span className={`ml-2 text-sm font-medium ${saving >= 0 ? "text-good" : "text-warn"}`}>
-                                      {saving >= 0 ? `save ${usd(saving)}` : `${usd(-saving)} more`}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="tabular mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-muted">
-                                <span className="text-foreground/80">{o.supplierName}</span>
-                                <span>{o.packs} × {o.packLabel}</span>
-                                <span>{usdPrecise(o.unitPrice)} per {d.item.unit}</span>
-                                <span>{o.deliveryDays} day{o.deliveryDays > 1 ? "s" : ""}</span>
-                                <span>★ {o.rating}</span>
-                              </div>
-                              <p className="mt-1.5 line-clamp-1 text-sm text-muted">{o.why}</p>
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </article>
+                    deal={d}
+                    included={sel.included}
+                    sku={sel.sku}
+                    onChange={(patch) => setSelection({ ...selection, [i]: { ...sel, ...patch } })}
+                  />
                 );
               })}
-            </div>
+            </ul>
 
             <button onClick={startOver} className="mt-8 text-sm text-muted hover:text-foreground">
-              New list
+              Start a new list
             </button>
           </section>
         )}
@@ -620,21 +628,31 @@ export function Stockwise() {
 
       {step === "deals" && (
         <div className="fixed inset-x-0 bottom-4 px-4">
-          <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 rounded-3xl border border-line bg-surface-2/85 px-5 py-4 shadow-2xl shadow-black/50 backdrop-blur-xl">
-            <div>
-              <div className="tabular font-display text-xl font-semibold">{usd(totals.newSpend)}</div>
-              <div className="hidden text-sm text-muted sm:block">
-                {chosen.length} item{chosen.length === 1 ? "" : "s"} · {totals.bySupplier.size} supplier
-                {totals.bySupplier.size === 1 ? "" : "s"}
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 rounded-3xl border border-line bg-surface-2/85 px-5 py-4 shadow-2xl shadow-black/10 backdrop-blur-xl">
+            <div className="min-w-0">
+              <div className="tabular font-display text-xl font-semibold">
+                {usd(totals.newSpend)}
+                {budgetNum != null && <span className="block whitespace-nowrap text-sm font-normal text-muted sm:ml-2 sm:inline">of {usd(budgetNum)}</span>}
               </div>
+              {totals.overBudget > 0 ? (
+                <div className="text-sm font-medium text-warn">
+                  {usd(totals.overBudget)} over budget
+                  <span className="hidden sm:inline">. Untick items, pick cheaper options or raise the budget.</span>
+                </div>
+              ) : (
+                <div className="hidden text-sm text-muted sm:block">
+                  {chosen.length} item{chosen.length === 1 ? "" : "s"} · {totals.bySupplier.size} supplier
+                  {totals.bySupplier.size === 1 ? "" : "s"}
+                </div>
+              )}
             </div>
             <PrimaryButton
               onClick={approveAndPay}
-              disabled={busy !== null || chosen.length === 0}
+              disabled={busy !== null || chosen.length === 0 || totals.overBudget > 0}
               loading={busy === "checkout"}
               loadingLabel="Opening checkout…"
             >
-              Approve &amp; pay
+              Approve and buy
             </PrimaryButton>
           </div>
         </div>
@@ -651,10 +669,9 @@ function stockLine(it: InventoryItem) {
 }
 
 function ShortageTag({ level }: { level: NonNullable<InventoryItem["shortage"]> }) {
-  const style =
-    level === "low" ? "bg-warn/15 text-warn" : "bg-[#ff6b8a]/15 text-[#ff8aa3]";
+  const style = level === "low" ? "bg-warn/15 text-warn" : "bg-[#ff6b8a]/15 text-[#b8264c]";
   const label = level === "out" ? "Out" : level === "severe" ? "Very low" : "Low";
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${style}`}>{label}</span>;
+  return <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${style}`}>{label}</span>;
 }
 
 function PrimaryButton(props: {
@@ -668,11 +685,233 @@ function PrimaryButton(props: {
     <button
       onClick={props.onClick}
       disabled={props.disabled}
-      className="btn-primary inline-flex items-center gap-2 rounded-full px-6 py-3 font-bold disabled:cursor-not-allowed disabled:opacity-40"
+      className="btn-primary inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-5 py-3 font-bold disabled:cursor-not-allowed disabled:opacity-40 sm:px-6"
     >
       {props.loading && <span className="size-4 animate-spin rounded-full border-2 border-black/20 border-t-black/70" />}
       {props.loading ? props.loadingLabel : props.children}
     </button>
+  );
+}
+
+function DealRow({
+  deal: d,
+  included,
+  sku,
+  onChange,
+}: {
+  deal: ItemDeal;
+  included: boolean;
+  sku: string | null;
+  onChange: (patch: { included?: boolean; sku?: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const pick = d.options.find((o) => o.sku === sku) ?? null;
+  const saving = pick && d.currentCost != null ? d.currentCost - pick.total : null;
+  const budgetSwap = d.note?.includes("budget") ?? false;
+
+  return (
+    <li className={included ? "" : "bg-foreground/[0.02]"}>
+      <div className="flex items-center gap-4 px-5 py-4">
+        <input
+          type="checkbox"
+          checked={included}
+          disabled={!d.options.length}
+          onChange={(e) => onChange({ included: e.target.checked })}
+          aria-label={`Buy ${d.item.name}`}
+          className="size-5 shrink-0 accent-[var(--orchid)]"
+        />
+        <div className={`grid min-w-0 flex-1 gap-x-6 gap-y-1 sm:grid-cols-[1fr_1.4fr_7rem] sm:items-center ${included ? "" : "opacity-50"}`}>
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate font-semibold">{d.item.name}</span>
+              {d.item.shortage && <ShortageTag level={d.item.shortage} />}
+            </div>
+            <div className="tabular text-sm text-muted">{qty(d.item.quantity, d.item.unit)}</div>
+          </div>
+          {pick ? (
+            <div className="min-w-0 text-sm">
+              <div className="truncate">{pick.productName}</div>
+              <div className="truncate text-muted">
+                {pick.supplierName}, {pick.deliveryDays === 1 ? "arrives tomorrow" : `arrives in ${pick.deliveryDays} days`}
+              </div>
+              {budgetSwap && <div className="text-warn">Cheaper pick to fit your budget</div>}
+            </div>
+          ) : (
+            <div className="text-sm text-muted">{d.note ?? "No match found"}</div>
+          )}
+          {pick && (
+            <div className="tabular sm:text-right">
+              <div className="font-display font-semibold">{usd(pick.total)}</div>
+              {saving != null && (
+                <div className={`text-sm ${saving >= 0 ? "text-good" : "text-warn"}`}>
+                  {saving >= 0 ? `Save ${usd(saving)}` : `${usd(-saving)} more`}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        {d.options.length > 1 ? (
+          <button
+            onClick={() => setOpen(!open)}
+            aria-expanded={open}
+            className="flex w-9 shrink-0 items-center justify-end gap-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm text-muted sm:w-[7.5rem] transition hover:bg-foreground/5 hover:text-foreground"
+          >
+            <span className="hidden sm:inline">{open ? "Hide" : `${d.options.length} options`}</span>
+            <svg viewBox="0 0 20 20" className={`size-4 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="m5 7.5 5 5 5-5" />
+            </svg>
+            <span className="sr-only sm:hidden">Compare options</span>
+          </button>
+        ) : (
+          <span className="w-9 shrink-0 sm:w-[7.5rem]" aria-hidden />
+        )}
+      </div>
+
+      {open && (
+        <div className="space-y-1 px-5 pb-4 sm:pl-14">
+          {d.options.map((o) => {
+            const active = o.sku === sku;
+            const diff = d.currentCost != null ? d.currentCost - o.total : null;
+            return (
+              <label
+                key={o.sku}
+                className={`flex cursor-pointer gap-3 rounded-2xl px-4 py-3 text-sm transition ${
+                  active ? "gradient-border" : "border border-transparent hover:bg-foreground/[0.03]"
+                }`}
+              >
+                <input
+                  type="radio"
+                  checked={active}
+                  onChange={() => onChange({ sku: o.sku, included: true })}
+                  className="mt-0.5 size-4 accent-[var(--orchid)]"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap justify-between gap-x-4">
+                    <span className="font-medium">{o.productName}</span>
+                    <span className="tabular">
+                      <span className="font-semibold">{usd(o.total)}</span>
+                      {diff != null && (
+                        <span className={`ml-2 ${diff >= 0 ? "text-good" : "text-warn"}`}>
+                          {diff >= 0 ? `save ${usd(diff)}` : `${usd(-diff)} more`}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="tabular text-muted">
+                    {o.supplierName}, {o.packs} × {o.packLabel}, {usdPrecise(o.unitPrice)} per {d.item.unit}
+                  </div>
+                  <p className="mt-1">{o.why}</p>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </li>
+  );
+}
+
+function BackButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className="-ml-2 mb-4 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-sm font-medium text-muted transition hover:bg-foreground/5 hover:text-foreground"
+    >
+      <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M12.5 15 7.5 10l5-5" />
+      </svg>
+      <span>
+        <span className="sr-only">Back to </span>
+        {children}
+      </span>
+    </button>
+  );
+}
+
+function BudgetMeter(props: {
+  budget: string;
+  onBudgetChange: (v: string) => void;
+  noLimit: boolean;
+  onNoLimitChange: (v: boolean) => void;
+  budgetNum: number | null;
+  spend: number;
+  stale: boolean;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
+  const { budgetNum, spend } = props;
+  const over = budgetNum != null && spend > budgetNum + 0.005;
+  const pct = budgetNum ? Math.min(100, (spend / budgetNum) * 100) : 0;
+  return (
+    <div className="mt-6 rounded-2xl border border-line bg-surface/80 px-5 py-4 backdrop-blur">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm">
+          {budgetNum == null ? (
+            <span className="text-muted">No budget limit on this order.</span>
+          ) : over ? (
+            <span className="font-medium text-warn">{usd(spend - budgetNum)} over your budget</span>
+          ) : (
+            <span>
+              <span className="tabular font-semibold">{usd(budgetNum - spend)}</span>{" "}
+              <span className="text-muted">left in your budget</span>
+            </span>
+          )}
+        </div>
+        {props.noLimit ? (
+          <button
+            onClick={() => props.onNoLimitChange(false)}
+            className="text-sm font-medium text-glacier underline-offset-4 hover:underline"
+          >
+            Set a budget
+          </button>
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-muted">
+            <label className="flex items-center gap-2">
+              Budget
+              <span className="flex items-center rounded-xl border border-line bg-background/60 px-3 focus-within:border-orchid">
+                <span>$</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="any"
+                  placeholder="e.g. 1000"
+                  value={props.budget}
+                  onChange={(e) => props.onBudgetChange(e.target.value)}
+                  className="tabular w-24 bg-transparent px-1.5 py-1.5 text-right text-foreground outline-none placeholder:text-muted/60"
+                />
+              </span>
+            </label>
+            <button
+              onClick={() => props.onNoLimitChange(true)}
+              className="rounded-full px-2 py-1 font-medium transition hover:bg-foreground/5 hover:text-foreground"
+            >
+              No limit
+            </button>
+          </div>
+        )}
+      </div>
+      {props.stale && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-foreground/[0.04] px-3 py-2 text-sm">
+          <span className="text-muted">These deals were picked for {props.budgetNum == null ? "a different budget" : "your old budget"}.</span>
+          <button
+            onClick={props.onRefresh}
+            disabled={props.refreshing}
+            className="font-medium text-glacier underline-offset-4 hover:underline disabled:opacity-50"
+          >
+            {props.refreshing ? "Finding deals…" : "Find deals for this budget"}
+          </button>
+        </div>
+      )}
+      {budgetNum != null && (
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-line" role="meter" aria-valuemin={0} aria-valuemax={budgetNum} aria-valuenow={spend} aria-label="Budget used">
+          <div
+            className="h-full rounded-full transition-[width] duration-300"
+            style={{ width: `${pct}%`, background: over ? "var(--warn)" : "var(--grad)" }}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 

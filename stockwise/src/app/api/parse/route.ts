@@ -1,23 +1,11 @@
 import * as XLSX from "xlsx";
 import { ParsedInventorySchema, type InventoryItem } from "@/lib/schemas";
 import { UserFacingError, errorResponse, structuredCall } from "@/lib/claude";
+import { demoParseRows, demoParseText, isDemo } from "@/lib/demo";
+import { shortageOf } from "@/lib/shortage";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_TEXT_CHARS = 60_000;
-
-// Shortage bands, as a share of par. Worked out here from the numbers, not by the model.
-const SEVERE_AT = 0.15;
-const LOW_AT = 0.35;
-
-function shortageOf(onHand: number | null, par: number | null, flaggedUrgent: boolean): InventoryItem["shortage"] {
-  if (onHand != null && onHand <= 0) return "out";
-  if (onHand != null && par != null && par > 0) {
-    const share = Math.round((onHand / par) * 1000) / 1000;
-    if (share <= SEVERE_AT) return "severe";
-    if (share <= LOW_AT) return flaggedUrgent ? "severe" : "low";
-  }
-  return flaggedUrgent ? "severe" : null;
-}
 
 const RANK = { out: 0, severe: 1, low: 2 } as const;
 
@@ -45,10 +33,15 @@ export async function POST(request: Request) {
     if (file instanceof File && file.size > 0) {
       if (file.size > MAX_FILE_BYTES) throw new UserFacingError("File is larger than 5 MB.");
       const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      if (isDemo()) {
+        const rows = wb.SheetNames.flatMap((n) => XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[n], { header: 1, blankrows: false }));
+        return demoResult(demoParseRows(rows));
+      }
       input = wb.SheetNames.map(
         (name) => `### Sheet: ${name}\n${XLSX.utils.sheet_to_csv(wb.Sheets[name], { blankrows: false })}`,
       ).join("\n\n");
     } else if (typeof text === "string" && text.trim()) {
+      if (isDemo()) return demoResult(demoParseText(text));
       input = text;
     } else {
       throw new UserFacingError("Add some items or upload a spreadsheet.");
@@ -74,8 +67,19 @@ export async function POST(request: Request) {
       .map((it, i) => ({ it, i }))
       .sort((a, b) => (a.it.shortage ? RANK[a.it.shortage] : 3) - (b.it.shortage ? RANK[b.it.shortage] : 3) || a.i - b.i)
       .map(({ it }) => it);
-    return Response.json({ items, skipped: parsed.skipped });
+    return Response.json({ items, skipped: parsed.skipped, mode: "ai" });
   } catch (err) {
     return errorResponse(err);
   }
+}
+
+function demoResult(parsed: ReturnType<typeof demoParseText>) {
+  if (parsed.items.length === 0) {
+    throw new UserFacingError("No purchasable stock items were found in that input.", 422);
+  }
+  const items = parsed.items
+    .map((it, i) => ({ it, i }))
+    .sort((a, b) => (a.it.shortage ? RANK[a.it.shortage] : 3) - (b.it.shortage ? RANK[b.it.shortage] : 3) || a.i - b.i)
+    .map(({ it }) => it);
+  return Response.json({ items, skipped: parsed.skipped, mode: "demo" });
 }

@@ -1,19 +1,19 @@
 @import "tailwindcss";
 
-/* "Night roast": dark only. One gradient (ember → orchid → glacier) carries the identity. */
+/* Light mode. One gradient (ember → orchid → glacier) carries the identity, kept off text. */
 :root {
-  color-scheme: dark;
-  --background: #0d0a1c;
-  --surface: #161229;
-  --surface-2: #1e1838;
-  --foreground: #f2eeff;
-  --muted: #9a93b8;
-  --line: rgb(255 255 255 / 0.08);
+  color-scheme: light;
+  --background: #f7f6fb;
+  --surface: #ffffff;
+  --surface-2: #ffffff;
+  --foreground: #1b1530;
+  --muted: #676281;
+  --line: rgb(27 21 48 / 0.09);
   --ember: #ff8a3d;
   --orchid: #c651ff;
-  --glacier: #4fd1ff;
-  --good: #5ff0b0;
-  --warn: #ffc46b;
+  --glacier: #1a9fd4;
+  --good: #13855a;
+  --warn: #a8620a;
   --grad: linear-gradient(115deg, var(--ember), var(--orchid) 50%, var(--glacier));
 }
 
@@ -42,7 +42,7 @@ body {
   font-family: var(--font-manrope), system-ui, sans-serif;
 }
 
-/* Page backdrop: drifting gradient mesh + fine dot grid. */
+/* Page backdrop: mesh gradients pooled in the four corners + a fine dot grid. */
 .backdrop {
   position: fixed;
   inset: 0;
@@ -53,45 +53,32 @@ body {
 .backdrop::before {
   content: "";
   position: absolute;
-  inset: -20%;
+  inset: -10%;
   background:
-    radial-gradient(40% 35% at 15% 10%, rgb(255 138 61 / 0.42), transparent 70%),
-    radial-gradient(35% 40% at 85% 5%, rgb(198 81 255 / 0.45), transparent 70%),
-    radial-gradient(45% 40% at 70% 90%, rgb(79 209 255 / 0.30), transparent 70%);
-  filter: blur(20px);
-  animation: drift 28s ease-in-out infinite alternate;
+    radial-gradient(32% 38% at 0% 0%, rgb(255 138 61 / 0.30), transparent 70%),
+    radial-gradient(26% 30% at 14% 8%, rgb(198 81 255 / 0.18), transparent 70%),
+    radial-gradient(34% 40% at 100% 0%, rgb(198 81 255 / 0.28), transparent 70%),
+    radial-gradient(24% 28% at 88% 12%, rgb(79 209 255 / 0.20), transparent 70%),
+    radial-gradient(34% 40% at 0% 100%, rgb(79 209 255 / 0.28), transparent 70%),
+    radial-gradient(24% 28% at 12% 88%, rgb(198 81 255 / 0.16), transparent 70%),
+    radial-gradient(34% 40% at 100% 100%, rgb(255 138 61 / 0.26), transparent 70%),
+    radial-gradient(24% 28% at 86% 90%, rgb(198 81 255 / 0.16), transparent 70%);
+  filter: blur(30px);
+  animation: drift 30s ease-in-out infinite alternate;
 }
 .backdrop::after {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(rgb(255 255 255 / 0.07) 1px, transparent 1px);
+  background-image: radial-gradient(rgb(27 21 48 / 0.07) 1px, transparent 1px);
   background-size: 22px 22px;
-  mask-image: linear-gradient(to bottom, black, transparent 75%);
+  mask-image: radial-gradient(60% 60% at 50% 50%, black, transparent 100%);
 }
 @keyframes drift {
   to {
-    transform: translate3d(4%, 3%, 0) rotate(8deg);
+    transform: scale(1.06) translate3d(1.5%, -1.5%, 0);
   }
 }
-
-/* Crema rings behind the headline. */
-.rings {
-  background: repeating-radial-gradient(
-    circle at 100% 0%,
-    rgb(198 81 255 / 0.28) 0 1px,
-    transparent 1px 16px
-  );
-  mask-image: radial-gradient(85% 110% at 100% 0%, black, transparent 80%);
-}
-
-.gradient-text {
-  background: var(--grad);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
 /* Gradient hairline border on a filled surface. */
 .gradient-border {
   border: 1px solid transparent;

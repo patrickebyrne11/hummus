@@ -1,22 +1,24 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { supplierById } from "@/lib/catalog";
 import { usd } from "@/lib/format";
+import { decodeDemoOrder, groupBySupplier } from "@/lib/orders";
+import { OrderCards, PageShell, toView, type OrderGroupView } from "@/components/OrderCards";
 import { ClearSavedState } from "./ClearSavedState";
 
 export default function OrdersPage({ searchParams }: PageProps<"/orders">) {
   return (
-    <Suspense fallback={<Shell title="Loading your order…" />}>
+    <Suspense fallback={<PageShell title="Loading your order…" />}>
       <OrderDetails searchParams={searchParams} />
     </Suspense>
   );
 }
 
 async function OrderDetails({ searchParams }: Pick<PageProps<"/orders">, "searchParams">) {
-  const { session_id } = await searchParams;
-  if (typeof session_id !== "string") return <Shell title="No order found" />;
+  const { session_id, demo } = await searchParams;
+  if (typeof demo === "string") return <DemoOrder encoded={demo} />;
+  if (typeof session_id !== "string") return <PageShell title="No order found" />;
 
   let session: Stripe.Checkout.Session;
   try {
@@ -24,79 +26,53 @@ async function OrderDetails({ searchParams }: Pick<PageProps<"/orders">, "search
       expand: ["line_items.data.price.product"],
     });
   } catch {
-    return <Shell title="We couldn't load that order" />;
+    return <PageShell title="We couldn't load that order" />;
   }
 
   const paid = session.payment_status === "paid";
-  const groups = new Map<string, { name: string; lines: Stripe.LineItem[]; subtotal: number }>();
+  const groups = new Map<string, OrderGroupView>();
   for (const li of session.line_items?.data ?? []) {
     const product = li.price?.product as Stripe.Product | undefined;
     const supplierId = product?.metadata.supplierId ?? "unknown";
     const g = groups.get(supplierId) ?? {
-      name: product?.metadata.supplierName ?? "Supplier",
+      key: supplierId,
+      supplierName: product?.metadata.supplierName ?? "Supplier",
+      deliveryDays: supplierById.get(supplierId)?.deliveryDays ?? null,
       lines: [],
       subtotal: 0,
     };
-    g.lines.push(li);
+    g.lines.push({ key: li.id, label: `${li.quantity} × ${li.description}`, total: li.amount_total / 100 });
     g.subtotal += li.amount_total / 100;
     groups.set(supplierId, g);
   }
 
   return (
-    <Shell title={paid ? "Done. Your orders are placed." : "Payment pending"}>
+    <PageShell title={paid ? "Done. Your orders are placed." : "Payment pending"}>
       {paid && <ClearSavedState />}
-      <p className="mt-2 text-muted">
+      <p className="mt-3 text-lg text-muted">
         {paid
-          ? `Paid ${usd((session.amount_total ?? 0) / 100)} in Stripe test mode. The agent has split your purchase into one order per supplier.`
+          ? `Paid ${usd((session.amount_total ?? 0) / 100)} in Stripe test mode, split into one order per supplier.`
           : "Stripe hasn't confirmed this payment yet."}
       </p>
-
-      <div className="mt-8 space-y-4">
-        {[...groups.entries()].map(([id, g], idx) => {
-          const supplier = supplierById.get(id);
-          return (
-            <article key={id} className="rounded-3xl border border-line bg-surface/80 backdrop-blur">
-              <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-5 py-3">
-                <div>
-                  <div className="text-xs text-muted">
-                    PO-{session.id.slice(-6).toUpperCase()}-{idx + 1}
-                  </div>
-                  <h2 className="font-medium">{g.name}</h2>
-                </div>
-                <div className="text-sm text-muted">
-                  {supplier ? `Arrives in about ${supplier.deliveryDays} day${supplier.deliveryDays > 1 ? "s" : ""}` : ""}
-                </div>
-              </header>
-              <ul className="divide-y divide-line">
-                {g.lines.map((li) => (
-                  <li key={li.id} className="tabular flex justify-between gap-4 px-5 py-2.5 text-sm">
-                    <span>
-                      {li.quantity} × {li.description}
-                    </span>
-                    <span>{usd(li.amount_total / 100)}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="tabular flex justify-between border-t border-line px-5 py-3 font-medium">
-                <span>Subtotal</span>
-                <span>{usd(g.subtotal)}</span>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-    </Shell>
+      <OrderCards groups={[...groups.values()]} refPrefix={session.id.slice(-6).toUpperCase()} />
+    </PageShell>
   );
 }
 
-function Shell({ title, children }: { title: string; children?: React.ReactNode }) {
+function DemoOrder({ encoded }: { encoded: string }) {
+  const lines = decodeDemoOrder(encoded);
+  if (!lines.length) return <PageShell title="No order found" />;
+  const total = lines.reduce((s, l) => s + l.total, 0);
+  const ref = encoded.length.toString(36).toUpperCase().padStart(3, "0") + lines.length;
+
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
-      <h1 className="font-display text-3xl font-semibold tracking-tight">{title}</h1>
-      {children}
-      <Link href="/" className="mt-8 inline-block text-sm text-glacier underline-offset-4 hover:underline">
-        ← Start a new restock
-      </Link>
-    </main>
+    <PageShell title="Done. Your orders are placed.">
+      <ClearSavedState />
+      <p className="mt-3 text-lg text-muted">
+        {usd(total)} across {groupBySupplier(lines).length} suppliers, split into one order each. This is a demo, so no
+        money moved and no supplier was contacted.
+      </p>
+      <OrderCards groups={toView(lines)} refPrefix={`DEMO${ref}`} />
+    </PageShell>
   );
 }

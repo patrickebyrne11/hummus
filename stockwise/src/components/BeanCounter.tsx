@@ -62,8 +62,8 @@ const ACTIONS: Record<string, { label: string; tone: "good" | "warn" | "bad" | "
 const TONE: Record<string, string> = {
   good: "bg-good/15 text-good",
   warn: "bg-warn/15 text-warn",
-  bad: "bg-[#ff6b8a]/15 text-[#ff8aa3]",
-  muted: "bg-white/5 text-muted",
+  bad: "bg-[#ff6b8a]/15 text-[#b8264c]",
+  muted: "bg-foreground/5 text-muted",
 };
 
 async function call<T>(path: string, body?: unknown): Promise<T> {
@@ -474,7 +474,7 @@ function Card({ title, step, children }: { title: string; step: number; children
   return (
     <section className="rounded-3xl border border-line bg-surface/80 p-5 backdrop-blur">
       <h2 className="mb-4 flex items-center gap-2 font-display text-lg font-semibold">
-        <span className="tabular grid size-6 place-items-center rounded-full bg-white/5 text-xs text-muted">{step}</span>
+        <span className="tabular grid size-6 place-items-center rounded-full bg-foreground/5 text-xs text-muted">{step}</span>
         {title}
       </h2>
       {children}

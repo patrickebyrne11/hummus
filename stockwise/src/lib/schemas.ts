@@ -99,7 +99,10 @@ export interface ItemDeal {
   note: string | null;
 }
 
+export const BudgetSchema = z.number().positive().max(10_000_000).nullable().optional();
+
 export const CheckoutRequestSchema = z.object({
+  budget: BudgetSchema,
   lines: z
     .array(z.object({ sku: z.string(), packs: z.number().int().positive().max(500) }))
     .min(1),

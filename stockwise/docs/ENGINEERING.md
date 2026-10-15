@@ -91,13 +91,30 @@ Both AI calls go through `structuredCall()` in `src/lib/claude.ts`:
 
 **Rule: the model never produces a dollar figure that Bob pays.** If you add features, keep the money math deterministic.
 
+### Budget
+
+Bob chooses **No limit** (the default) or **Set a budget** for the whole order on the first screen, and can switch or change it on the deals screen.
+
+- `/api/deals` takes `budget`. Claude is told to stay within it, and the server's `fitToBudget()` acts as a safety net: if the recommended picks still exceed it, it switches items to cheaper options (largest saving first) and says so in the item's note and the summary. If even the cheapest options don't fit, the summary says by how much.
+- The deals screen shows a budget meter. **Approve is disabled while the order is over budget**, and if Bob changes the budget after the search, he's offered "Find deals for this budget".
+- `/api/checkout` re-checks the total against `budget` server-side and refuses orders over it.
+
 ### Canonical units
 
 Every item is normalised to `kg`, `L` or `unit`. Catalog products declare `unitsPerPack` in the same canonical unit, which keeps pricing a simple division. The parse prompt includes the conversion factors.
 
-### No stubbed AI output
+### Demo mode (no keys needed)
 
-There is intentionally **no mock or sample-data fallback** for model calls. If `ANTHROPIC_API_KEY` is missing, the API returns a clear error. Fake output would hide extraction-quality problems, which is exactly what we need to see when testing with real, messy spreadsheets.
+Set `CLAUDE_BACKEND=demo` to run in **demo mode**, so anyone can click through the full journey with no API key and no Claude Code sign-in (useful for a shared preview deployment):
+
+| Step | Live (`api` or `claude-code` backend) | Demo mode (`CLAUDE_BACKEND=demo`) |
+|---|---|---|
+| Parse list | Claude structured output | Rule-based parser in `src/lib/demo.ts`: regex units/prices, par − on-hand for sheets |
+| Find deals | Claude picks SKUs | Keyword matching with variant rules (size, milk type, flavour, decaf), then lowest total |
+| Checkout | Stripe Checkout (test mode) | `/checkout/demo`: no card fields; the order is encoded in the URL |
+| Orders | Read from the Stripe session | Rebuilt from the catalog using the URL |
+
+The header badge shows **"Demo mode, sample matching"** whenever demo results are on screen, and the API responses carry `mode: "demo" | "ai"`. Without `STRIPE_SECRET_KEY`, checkout uses the demo screen even when Claude is live. Demo matching is much cruder than Claude; it exists for walkthroughs, not for judging extraction quality.
 
 ---
 
@@ -197,7 +214,8 @@ npm run build && npm run lint
 ## 7. Known gaps / not yet done
 
 **Verified so far:** production build, lint, step-1 UI rendering, and the missing-key error path.
-**Not yet verified end to end:** live parse, deals and checkout (they need real API keys).
+**Verified in demo mode:** the full journey (typed list and the sample .xlsx → deals → demo checkout → orders).
+**Not yet verified:** the live Claude and Stripe paths (they need real keys).
 
 | Area | Gap | Suggested direction |
 |---|---|---|
@@ -218,4 +236,4 @@ npm run build && npm run lint
 - Next.js 16 has breaking changes compared with older versions. Read `node_modules/next/dist/docs/` before using unfamiliar APIs (see `AGENTS.md`).
 - Use the SDKs' typed errors (`Anthropic.RateLimitError`, etc.); never string-match error messages.
 - Shared shapes live in `src/lib/schemas.ts` as Zod schemas. Derive TypeScript types from them rather than duplicating them.
-- Design tokens (coffee palette, light and dark) are CSS variables in `src/app/globals.css`, exposed to Tailwind via `@theme inline`.
+- Design tokens (light mode; one ember→orchid→glacier gradient used only on non-text elements, plus corner mesh glows) are CSS variables in `src/app/globals.css`, exposed to Tailwind via `@theme inline`.
