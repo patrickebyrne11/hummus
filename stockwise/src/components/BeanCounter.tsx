@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 // All decisions, the policy guard, Stripe and Cognee live in the Python API (api.py),
@@ -155,6 +156,9 @@ export function BeanCounter() {
           <span className="hidden text-sm text-muted sm:inline">for Bean &amp; Leaf Coffee</span>
         </div>
         <div className="flex items-center gap-3">
+          <Link href="/" className="text-xs text-muted hover:text-foreground">
+            ← Stockwise
+          </Link>
           <button
             onClick={() => mutate("/reset")}
             disabled={busy !== null}

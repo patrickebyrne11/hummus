@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { SUPPLIERS } from "@/lib/catalog";
 import type { InventoryItem, ItemDeal } from "@/lib/schemas";
@@ -184,10 +185,15 @@ export function Stockwise() {
           <span className="btn-primary grid size-9 place-items-center rounded-xl font-display text-sm font-bold">S</span>
           <span className="font-display text-lg font-semibold tracking-tight">Stockwise</span>
         </div>
-        <span className="flex items-center gap-2 rounded-full border border-line bg-surface/60 px-3 py-1 text-xs text-muted backdrop-blur">
-          <span className="size-1.5 rounded-full bg-warn" />
-          Stripe test mode
-        </span>
+        <div className="flex items-center gap-3">
+          <Link href="/beancounter" className="text-xs text-muted hover:text-foreground">
+            BeanCounter agent →
+          </Link>
+          <span className="flex items-center gap-2 rounded-full border border-line bg-surface/60 px-3 py-1 text-xs text-muted backdrop-blur">
+            <span className="size-1.5 rounded-full bg-warn" />
+            Stripe test mode
+          </span>
+        </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-4 pb-44 pt-4 sm:px-6">

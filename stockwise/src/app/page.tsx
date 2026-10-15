@@ -1,5 +1,5 @@
-import { BeanCounter } from "@/components/BeanCounter";
+import { Stockwise } from "@/components/Stockwise";
 
 export default function Home() {
-  return <BeanCounter />;
+  return <Stockwise />;
 }
