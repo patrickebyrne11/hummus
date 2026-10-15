@@ -10,7 +10,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).parent / ".env")
 
 DATA = Path(__file__).parent / "data"
 
@@ -32,7 +32,7 @@ def reset_audit_log():
 def hello_world_payment(cus_id, pm_id):
     import stripe_client
     pi = stripe_client.pay_supplier(
-        cus_id, pm_id, supplier="Metro Wholesale", item="hello_world", qty=1, unit_price=1.00,
+        cus_id, pm_id, supplier="Booker Wholesale", item="hello_world", qty=1, unit_price=1.00,
         clause_ids=["§0"], evidence="hello-world smoke test from seed.py", approved_by="seed",
     )
     print(f"Hello-world PaymentIntent: {pi.id} status={pi.status} amount={pi.amount}p")

@@ -1,8 +1,14 @@
-"""Stripe test-mode wrapper. The demo account plays the supplier marketplace.
+"""Stripe test-mode wrapper.
 
 The shop owner's card is saved on a Stripe Customer ("Bean & Leaf Coffee").
 Every purchase is a PaymentIntent charged off-session to that card, with the
 audit trail (supplier, clauses, evidence) stored in PaymentIntent metadata.
+
+Each approved supplier has a Stripe Connect account (see .env). When that
+account can accept transfers, the purchase is a destination charge so the
+money lands with the supplier. If it can't (test accounts that haven't
+finished onboarding), the charge stays on the platform and the supplier's
+account id is still recorded in metadata, so the demo never breaks.
 """
 import json
 import os
@@ -11,10 +17,17 @@ from pathlib import Path
 import stripe
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).parent / ".env")
 stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
 
 SHOP_FILE = Path(__file__).parent / "data" / "shop.json"
+
+# Approved supplier name -> Connect account id (from .env). Must match policy §2.
+SUPPLIER_ACCOUNTS = {
+    "Booker Wholesale": os.environ.get("STRIPE_SUPPLIER_BOOKER", ""),
+    "Bidfood": os.environ.get("STRIPE_SUPPLIER_BIDFOOD", ""),
+    "Bean Bros Roasters": os.environ.get("STRIPE_SUPPLIER_BEANBROS", ""),
+}
 
 
 def setup_shop_customer():
@@ -38,16 +51,25 @@ def pay_supplier(customer_id, pm_id, supplier, item, qty, unit_price, clause_ids
                  approved_by="agent"):
     """Charge the shop's card for a purchase order. Returns the PaymentIntent."""
     amount = round(qty * unit_price * 100)  # pence
-    return stripe.PaymentIntent.create(
+    supplier_acct = SUPPLIER_ACCOUNTS.get(supplier, "")
+    params = dict(
         amount=amount, currency="gbp", customer=customer_id, payment_method=pm_id,
         confirm=True, off_session=True,
         description=f"PO: {qty} x {item} from {supplier}",
         metadata={  # audit trail lives on the money itself; values must be str <= 500 chars
-            "supplier": supplier, "item": item, "qty": str(qty), "unit_price": str(unit_price),
+            "supplier": supplier, "supplier_account": supplier_acct,
+            "item": item, "qty": str(qty), "unit_price": str(unit_price),
             "clauses": ",".join(clause_ids), "evidence": str(evidence)[:500],
             "approved_by": approved_by,
         },
     )
+    if supplier_acct:
+        try:  # route funds to the supplier's Connect account
+            return stripe.PaymentIntent.create(**params, transfer_data={"destination": supplier_acct})
+        except stripe.InvalidRequestError as e:
+            # Connected account can't receive transfers yet: keep the charge on the platform.
+            params["metadata"]["routing_note"] = f"platform charge; destination refused: {str(e)[:120]}"
+    return stripe.PaymentIntent.create(**params)
 
 
 def refund(payment_intent_id):
