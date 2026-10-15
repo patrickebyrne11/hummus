@@ -3,6 +3,7 @@ import { catalogForPrompt, productBySku, supplierById } from "@/lib/catalog";
 import {
   DealsResultSchema,
   InventoryItemSchema,
+  type InventoryItem,
   type ItemDeal,
   type PricedOption,
 } from "@/lib/schemas";
@@ -49,6 +50,60 @@ function priceOption(
   };
 }
 
+// Speed: one call per small group of items, run in parallel, instead of one long call that
+// writes every option for every item in sequence. Same model, prompt and effort per group.
+const GROUP_SIZE = 2;
+const MAX_PARALLEL = 5; // stay well inside subscription / API rate limits
+const GroupResultSchema = DealsResultSchema.pick({ items: true });
+
+async function mapLimit<T, R>(xs: T[], limit: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(xs.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < xs.length) {
+      const i = next++;
+      out[i] = await fn(xs[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, xs.length) }, worker));
+  return out;
+}
+
+function describe(it: InventoryItem, i: number) {
+  return (
+    `${i}. ${it.name} — need ${it.quantity} ${it.unit}` +
+    (it.currentUnitPrice != null ? `, currently pays $${it.currentUnitPrice}/${it.unit}` : "") +
+    (it.currentSupplier ? ` from ${it.currentSupplier}` : "")
+  );
+}
+
+const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+/** The plan summary, built from the server-priced deals so every number is exact. */
+function summarise(deals: ItemDeal[]) {
+  const picked = deals.flatMap((d) => {
+    const o = d.options.find((x) => x.sku === d.recommendedSku);
+    return o ? [{ d, o }] : [];
+  });
+  const total = picked.reduce((s, p) => s + p.o.total, 0);
+  const suppliers = new Set(picked.map((p) => p.o.supplierName));
+  const comparable = picked.filter((p) => p.d.currentCost != null);
+  const saving = comparable.reduce((s, p) => s + (p.d.currentCost! - p.o.total), 0);
+  const missing = deals.filter((d) => !d.recommendedSku).map((d) => d.item.name);
+  const parts = [
+    `I found a best deal for ${picked.length} of ${deals.length} items across ${suppliers.size} supplier${suppliers.size === 1 ? "" : "s"}, ${usd(total)} in total.`,
+  ];
+  if (comparable.length > 0) {
+    parts.push(
+      saving >= 0
+        ? `On the ${comparable.length} items where you told me today's price, that saves ${usd(saving)}.`
+        : `On the ${comparable.length} items where you told me today's price, that costs ${usd(-saving)} more, usually for better quality.`,
+    );
+  }
+  if (missing.length > 0) parts.push(`Nothing in the catalog fits: ${missing.join(", ")}.`);
+  return parts.join(" ");
+}
+
 function round(n: number, dp = 2) {
   const f = 10 ** dp;
   return Math.round(n * f) / f;
@@ -60,21 +115,21 @@ export async function POST(request: Request) {
     if (!body.success) throw new UserFacingError("Invalid item list.");
     const { items } = body.data;
 
-    const list = items
-      .map(
-        (it, i) =>
-          `${i}. ${it.name} — need ${it.quantity} ${it.unit}` +
-          (it.currentUnitPrice != null ? `, currently pays $${it.currentUnitPrice}/${it.unit}` : "") +
-          (it.currentSupplier ? ` from ${it.currentSupplier}` : ""),
-      )
-      .join("\n");
-
-    const result = await structuredCall({
-      schema: DealsResultSchema,
-      system: SYSTEM,
-      user: `Bob's list:\n${list}`,
-      effort: "low",
+    const groups: { item: InventoryItem; i: number }[][] = [];
+    items.forEach((item, i) => {
+      if (i % GROUP_SIZE === 0) groups.push([]);
+      groups[groups.length - 1].push({ item, i });
     });
+
+    const groupResults = await mapLimit(groups, MAX_PARALLEL, (g) =>
+      structuredCall({
+        schema: GroupResultSchema,
+        system: SYSTEM,
+        user: `Items from Bob's list (keep these index numbers as itemIndex):\n${g.map(({ item, i }) => describe(item, i)).join("\n")}`,
+        effort: "low",
+      }),
+    );
+    const result = { items: groupResults.flatMap((r) => r.items) };
 
     // The model picks products; the server does all the money math from the catalog.
     const byIndex = new Map(result.items.map((d) => [d.itemIndex, d]));
@@ -97,7 +152,7 @@ export async function POST(request: Request) {
       };
     });
 
-    return Response.json({ deals, summary: result.summary });
+    return Response.json({ deals, summary: summarise(deals) });
   } catch (err) {
     return errorResponse(err);
   }
